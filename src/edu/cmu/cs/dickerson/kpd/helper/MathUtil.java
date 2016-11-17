@@ -1,6 +1,5 @@
 package edu.cmu.cs.dickerson.kpd.helper;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 

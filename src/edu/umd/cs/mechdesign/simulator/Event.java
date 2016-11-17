@@ -44,7 +44,8 @@ public class Event {
 	public static Event getNextEvent(Queue<Double> matchingTimes,
 			Queue<Pair<Double, Cycle>> cycleTransplantTimes,
 			Queue<Pair<Double, Vertex>> verticesByExitTime,
-			Queue<Pair<Double, Vertex>> verticesByEntryTime) {
+			Queue<Pair<Double, Vertex>> verticesByEntryTime,
+			Queue<Double> altEvents) {
 
 		// TODO stub for baseline simulation
 		double nextTransplantTime = Double.MAX_VALUE;
@@ -59,8 +60,16 @@ public class Event {
 		if (!verticesByExitTime.isEmpty())
 			patientDeparture = verticesByExitTime.peek().getLeft();
 
-		Double[] timesList = { matchingTimes.peek(), nextTransplantTime,
-				patientDeparture, newPatientArrival };
+		double matchingTime = Double.MAX_VALUE;
+		if (!matchingTimes.isEmpty())
+			matchingTime = matchingTimes.peek();
+
+		double altMatching = Double.MAX_VALUE;
+		if (!altEvents.isEmpty())
+			altMatching = altEvents.peek();
+
+		Double[] timesList = { matchingTime, nextTransplantTime,
+				patientDeparture, newPatientArrival, altMatching };
 
 		int minIndex = MathUtil.minIndex(Arrays.asList(timesList));
 		Double time = timesList[minIndex];
@@ -81,6 +90,10 @@ public class Event {
 		case 3:
 			type = EventType.PATIENT_ENTERS;
 			verticesByEntryTime.poll();
+			break;
+		case 4:
+			type = EventType.ALTRUIST_ENTERS;
+			// altEvents.poll();
 			break;
 		default:
 			type = EventType.TERMINATE_SIMULATION;

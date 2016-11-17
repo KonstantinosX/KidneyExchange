@@ -1,5 +1,6 @@
 package edu.umd.cs.mechdesign.simulator;
 
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -34,10 +35,14 @@ public class SimulationDriver {
 	private static ExponentialArrivalDistribution arrivalTimeGen;
 	private static ExponentialArrivalDistribution lifespanTimeGen;
 	private static ExponentialArrivalDistribution transplantTimeGen;
+	private static ExponentialArrivalDistribution altArrivalTimeGen;
 
 	public static void main(String[] args) {
-		int m = 6;
-		double lambda = 1.0;
+		double m = 3.5;
+		double lambda = 0.1;
+
+		double arrivalLambda = 0.3;
+		double timeLimit = 100;
 		// lambda = 5 or 6
 		// // List of m parameters (for every one time period, expect m vertices
 		// to enter, Poisson process)
@@ -61,10 +66,10 @@ public class SimulationDriver {
 		// from Saidman distribution)
 		Random r = new Random();
 
-		// TODO Need some values for m and lambda (look at DriverApprox)
 		arrivalTimeGen = new ExponentialArrivalDistribution(m, r);
 		lifespanTimeGen = new ExponentialArrivalDistribution(lambda, r);
 		transplantTimeGen = new ExponentialArrivalDistribution(lambda, r);
+		altArrivalTimeGen = new ExponentialArrivalDistribution(arrivalLambda, r);
 
 		double failure_param1 = 0.7; // e.g., constant failure rate of 70%
 
@@ -93,12 +98,16 @@ public class SimulationDriver {
 		int numPairs = (int) Math.round(graphSize * 0.95);
 		int numAlts = graphSize - numPairs;
 
-		/*
-		 * TODO this pool should be one where no further cycle matches can be
-		 * made anymore (continuously run the matching, until no new matchings
-		 * are found and then start the simulation with that pool)
-		 */
 		Pool pool = SaidmanGen.generate(numPairs, numAlts);
+
+		/*
+		 * Conducts all possible matchings in the initial pool so that the pool
+		 * we use to start the simulation is stable (no further matches can
+		 * happen)
+		 */
+		CycleGenerator cg = new CycleGenerator(pool);
+
+		conductAllRemainingTransplants(pool, cg, cycleCap, chainCap);
 
 		logger.info("Pool: " + pool);
 		logger.info("Altruists: " + pool.getAltruists());
@@ -110,14 +119,11 @@ public class SimulationDriver {
 					failure_param1);
 		}
 
-		CycleGenerator cg = new CycleGenerator(pool);
-
 		// ====== SIMULATION ======
 
 		double currTime = 0.0;
 		Event currEvent = null;
 		double lastExitTime = -1;
-		double timeLimit = 30;
 
 		/**
 		 * vertexID -> (arrivalTime, maxDepartureTime) This will be updated
@@ -139,6 +145,20 @@ public class SimulationDriver {
 		 * prioritized by entryTime
 		 */
 		Queue<Pair<Double, Vertex>> verticesByEntryTime = new PriorityQueue<Pair<Double, Vertex>>(
+				(int) timeLimit, new VertexTimeComparator());
+
+		/**
+		 * A priority queue that maintains the entry events for new altruists
+		 * that are supposed to come into the system prioritized by entryTime
+		 */
+		Queue<Double> altEvents = new PriorityQueue<Double>((int) timeLimit);
+
+		/**
+		 * A priority queue that maintains the altruists that are supposed to
+		 * come into the system prioritized by entryTime. We add new entries in
+		 * this queue when we add the altruist vertices
+		 */
+		Queue<Pair<Double, Vertex>> altruistsByEntryTime = new PriorityQueue<Pair<Double, Vertex>>(
 				(int) timeLimit, new VertexTimeComparator());
 
 		/**
@@ -195,9 +215,25 @@ public class SimulationDriver {
 
 		}
 
+		// schedule the arrival of altruists
+		double altrTime = currTime;
+		while (true) {
+
+			double entryTime = altrTime + altArrivalTimeGen.draw();
+			altrTime = entryTime;
+
+			if (altrTime > timeLimit) {
+				/*
+				 * If this vertex would arrive after the time limit, we're done
+				 * generating
+				 */
+				break;
+			}
+
+			altEvents.add(entryTime);
+		}
+
 		/*
-		 * TODO currently almost everyone who was at the pool beforehand dies as
-		 * soon as the simulation begins..
 		 * 
 		 * set the starting time of the simulation as the last entry time from
 		 * the individuals in the initial pool
@@ -210,7 +246,7 @@ public class SimulationDriver {
 		 * vertex pairs that are already in the pool, therefore I guess we can
 		 * attempt to start the simulation at the time the last vertex pair in
 		 * the pool entered the pool, and run it for some time timeLimit after
-		 * that. Also, we're assuming no matchings have happened before the last
+		 * that. Also, we're assuming no matchings can happen after the last
 		 * vertex pair has entered. This gives a disadvantage to everyone who's
 		 * already in the pool...
 		 * 
@@ -237,9 +273,10 @@ public class SimulationDriver {
 
 		System.out.println("Entry time of the last patient: " + currTime);
 
-		// add new arrivals that will take place afterwards (only add pairs not
-		// altruists for now)
-		// TODO with some probability, add an altruist
+		/*
+		 * add new arrivals that will take place afterwards (only add pairs not
+		 * altruists for now)
+		 */
 		logger.info("Scheduling new vertex pair arrivals...");
 		while (true) {
 
@@ -281,7 +318,7 @@ public class SimulationDriver {
 		// the next event can't be a transplant because we haven't had any
 		// matchings yet
 		currEvent = Event.getNextEvent(matchingTimes, cycleTransplantTimes,
-				verticesByExitTime, verticesByEntryTime);
+				verticesByExitTime, verticesByEntryTime, altEvents);
 
 		/*
 		 * the first event is probably going to be a death event from the
@@ -296,6 +333,8 @@ public class SimulationDriver {
 		System.out.println("CycleTransplant Times: " + cycleTransplantTimes);
 		System.out.println("VerticesBy Exit Time: " + verticesByExitTime);
 		System.out.println("VerticesBy Entry Time: " + verticesByEntryTime);
+
+		System.out.println("Altruist Events " + altEvents);
 		logger.info("State of the Pool: " + pool);
 		// System.exit(0);
 
@@ -394,8 +433,9 @@ public class SimulationDriver {
 							(currTime + transplantTimeGen.draw()), c));
 				}
 
-				System.out.println(cycleTransplantTimes);
-				System.exit(0);
+				// System.out.println(cycleTransplantTimes);
+				logger.info("State of pool: " + pool);
+				// System.exit(0);
 			}
 
 			if (currEvent.getType().equals(EventType.CONDUCT_TRANSPLANT)) {
@@ -417,19 +457,65 @@ public class SimulationDriver {
 				}
 			}
 
-			// TODO Handle the case where more than one event happens at a
-			// single point in time
+			if (currEvent.getType().equals(EventType.ALTRUIST_ENTERS)) {
 
-			// Queue[] nextEv = { matchingTimes, cycleTransplantTimes,
-			// verticesByExitTime, verticesByEntryTime };
+				int addPair = 0;
+				int addAltruist = 1;
+				Set<Vertex> l = SaidmanGen.addVerticesToPool(pool, addPair,
+						addAltruist);
 
+				// we're only generating one at a time
+				Vertex toAdd = l.iterator().next();
+
+				logger.info("Adding new altruist");
+				logger.info("State of the Pool: " + pool);
+
+				/* adding the altruist by entry time exit time */
+				altruistsByEntryTime.add(new Pair<Double, Vertex>(currTime,
+						toAdd));
+
+				altEvents.poll();
+			}
+
+			//
 			currEvent = Event.getNextEvent(matchingTimes, cycleTransplantTimes,
-					verticesByExitTime, verticesByEntryTime);
+					verticesByExitTime, verticesByEntryTime, altEvents);
 			currTime = currEvent.getTime();
 			// System.exit(0);
 		}
 		;
 
+		logger.info("pool: " + pool);
+	}
+
+	/**
+	 * Does matchings and transplants until there can be no more matchings done
+	 * in the pool
+	 * 
+	 * @param pool
+	 * @param cg
+	 * @param cycleCap
+	 * @param chainCap
+	 */
+	private static void conductAllRemainingTransplants(Pool pool,
+			CycleGenerator cg, int cycleCap, int chainCap) {
+
+		while (true) {
+			Solution s = conductMatches(pool, cg, cycleCap, chainCap);
+
+			/*
+			 * Add the new matchings to the queue of matchings that should
+			 * happen.
+			 */
+			if (s.getMatching().isEmpty())
+				return;
+
+			for (Cycle c : s.getMatching()) {
+				for (Vertex v : Cycle.getConstituentVertices(c, pool)) {
+					pool.removeVertex(v);
+				}
+			}
+		}
 	}
 
 	private static Solution conductMatches(Pool pool, CycleGenerator cg,
@@ -465,6 +551,7 @@ public class SimulationDriver {
 			return null;
 		}
 	}
+
 	// Simulation
 	// t is the current time we're at and allocated_time is the maximum time we
 	// should allocate to this simulation (for how long we should run it)

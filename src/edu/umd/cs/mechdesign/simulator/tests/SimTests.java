@@ -22,14 +22,16 @@ public class SimTests {
 		Queue<Pair<Double, Cycle>> cycleTransplantTimes = new PriorityQueue<Pair<Double, Cycle>>();
 		Queue<Pair<Double, Vertex>> verticesByExitTime = new PriorityQueue<Pair<Double, Vertex>>();
 		Queue<Pair<Double, Vertex>> verticesByEntryTime = new PriorityQueue<Pair<Double, Vertex>>();
-		
+		Queue<Double> altTimes = new PriorityQueue<Double>();
+
 		matchingTimes.add(4.5);
-		cycleTransplantTimes.add(new Pair<Double, Cycle>(1.4,null));
-		verticesByExitTime.add(new Pair<Double, Vertex>(1.6,null));
-		verticesByEntryTime.add(new Pair<Double, Vertex>(9.9,null));
+		cycleTransplantTimes.add(new Pair<Double, Cycle>(1.4, null));
+		verticesByExitTime.add(new Pair<Double, Vertex>(1.6, null));
+		verticesByEntryTime.add(new Pair<Double, Vertex>(9.9, null));
+		altTimes.add(9.0);
 
 		Event t = Event.getNextEvent(matchingTimes, cycleTransplantTimes,
-				verticesByExitTime, verticesByEntryTime);
+				verticesByExitTime, verticesByEntryTime, altTimes);
 		assertEquals(t.getType(), EventType.CONDUCT_TRANSPLANT);
 	}
 }
