@@ -2,6 +2,7 @@ package edu.umd.cs.mechdesign.simulator;
 
 import java.util.Arrays;
 import java.util.Queue;
+import java.util.Random;
 
 import edu.cmu.cs.dickerson.kpd.helper.MathUtil;
 import edu.cmu.cs.dickerson.kpd.helper.Pair;
@@ -104,5 +105,22 @@ public class Event {
 	@Override
 	public String toString() {
 		return type + ":" + time;
+	}
+
+	/**
+	 * Generates a random double with in min and max
+	 * 
+	 * @param min
+	 *            The minimum double that can be generated
+	 * @param max
+	 *            The maximum double that can be generated
+	 * @return
+	 */
+	public static double randomInRange(double min, double max) {
+		Random random = new Random();
+		double range = max - min;
+		double scaled = random.nextDouble() * range;
+		double shifted = scaled + min;
+		return shifted; // == (rand.nextDouble() * (max-min)) + min;
 	}
 }

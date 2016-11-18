@@ -69,7 +69,7 @@ public class SimTests {
 						Edge e = chainIter.next();
 
 						if (e.getSrc().equals("47")) {
- 							break;
+							break;
 						} else {
 							chainEdges.add(e);
 						}
@@ -84,6 +84,15 @@ public class SimTests {
 					return;
 				}
 			}
+		}
+	}
+
+	@Test
+	public void testRandomScheduling() {
+		double currTime = 34.33343;
+		for (int i = 0; i < 10; i++) {
+			System.out
+					.println(Event.randomInRange(0 + currTime, 12 + currTime));
 		}
 	}
 }

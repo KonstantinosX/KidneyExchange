@@ -1,5 +1,6 @@
 package edu.umd.cs.mechdesign.simulator;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -16,6 +17,9 @@ import edu.cmu.cs.dickerson.kpd.helper.CycleTimeComparator;
 import edu.cmu.cs.dickerson.kpd.helper.IOUtil;
 import edu.cmu.cs.dickerson.kpd.helper.Pair;
 import edu.cmu.cs.dickerson.kpd.helper.VertexTimeComparator;
+import edu.cmu.cs.dickerson.kpd.io.DriverApproxOutput;
+import edu.cmu.cs.dickerson.kpd.io.MatchingSimulationOutput;
+import edu.cmu.cs.dickerson.kpd.io.MatchingSimulationOutput.Col;
 import edu.cmu.cs.dickerson.kpd.solver.CycleFormulationCPLEXSolver;
 import edu.cmu.cs.dickerson.kpd.solver.exception.SolverException;
 import edu.cmu.cs.dickerson.kpd.solver.solution.Solution;
@@ -43,7 +47,9 @@ public class SimulationDriver {
 		double lambda = 0.005;
 
 		double arrivalLambda = 0.3;
-		double timeLimit = 200;
+		double timeLimit = 20;
+
+		String path = "sim_run.csv";
 		// lambda = 5 or 6
 		// // List of m parameters (for every one time period, expect m vertices
 		// to enter, Poisson process)
@@ -91,6 +97,12 @@ public class SimulationDriver {
 		int chainCap = 4;
 		int graphSize = 50;
 
+		/**
+		 * The time window in which we should schedule the newly matched
+		 * transplants
+		 * */
+		int schedulingTime = 12;
+
 		// IOUtil.dPrintln("\n*****\nGraph (|V|=" + graphSize + ", #" + graphRep
 		// + "/" + numGraphReps + "), cap: " + chainCap + ", gen: "
 		// + gen.getClass().getSimpleName() + "\n*****\n");
@@ -125,6 +137,14 @@ public class SimulationDriver {
 		double currTime = 0.0;
 		Event currEvent = null;
 		double lastExitTime = -1;
+
+		MatchingSimulationOutput out;
+		try {
+			out = new MatchingSimulationOutput(path);
+		} catch (IOException e) {
+			e.printStackTrace();
+			return;
+		}
 
 		/**
 		 * vertexID -> (arrivalTime, maxDepartureTime) This will be updated
@@ -213,6 +233,15 @@ public class SimulationDriver {
 				verticesByExitTime.add(new Pair<Double, Vertex>(exitTime, v));
 
 				System.out.println(v + " exit time :" + exitTime);
+			}
+			out.set(Col.VERTEX_ID, v.toString());
+			// Write the row of data
+			try {
+				out.record();
+			} catch (IOException e) {
+				IOUtil.dPrintln("Had trouble writing experimental output to file.  We assume this kills everything; quitting.");
+				e.printStackTrace();
+				System.exit(-1);
 			}
 
 		}
@@ -369,6 +398,13 @@ public class SimulationDriver {
 				while (it.hasNext()) {
 					Pair<Double, Cycle> cc = it.next();
 					Cycle c = cc.getRight();
+
+					/*
+					 * NOTE TODO this is probably unnecessairy (although still
+					 * correct) since we'll have to schedule each transplant in
+					 * each chain independantly ( they don't need to happen at
+					 * the same time)
+					 */
 					if (Cycle.isAChain(c, pool)) {
 						if (Cycle.getConstituentVertices(c, pool).contains(
 								toRemove)) {
@@ -479,11 +515,48 @@ public class SimulationDriver {
 				 * happen.
 				 */
 				for (Cycle c : s.getMatching()) {
-					cycleTransplantTimes.add(new Pair<Double, Cycle>(
-							(currTime + transplantTimeGen.draw()), c));
-				}
 
-				// TODO schedule chains seperately
+					if (Cycle.isAChain(c, pool)) {
+						logger.info("Got a CHAING! " + c);
+						/* chain */
+						Pair<Double, Cycle> p = null;
+						List<Edge> chainEdges = c.getEdges();
+
+						/*
+						 * Conduct all except for the last transplant in the
+						 * choin (since the last edge in the chani goes back to
+						 * the altruist)
+						 */
+						for (int i = 0; i < chainEdges.size() - 1; i++) {
+
+							Edge e = chainEdges.get(i);
+
+							List<Edge> l = new ArrayList<>();
+							l.add(e);
+							Cycle chainPortion = Cycle.makeCycle(l,
+									c.getWeight());
+
+							/*
+							 * schedule each portion of the chain independently
+							 * from eachother, a single transplant at a time
+							 */
+							Pair<Double, Cycle> pr = new Pair<Double, Cycle>(
+									Event.randomInRange(currTime, currTime
+											+ schedulingTime), chainPortion);
+
+							cycleTransplantTimes.add(pr);
+
+						}
+
+					} else {
+
+						/* schedule cycle */
+						cycleTransplantTimes.add(new Pair<Double, Cycle>(Event
+								.randomInRange(currTime, currTime
+										+ schedulingTime), c));
+					}
+
+				}
 
 				logger.info("State of pool: " + pool);
 			}
@@ -535,7 +608,17 @@ public class SimulationDriver {
 		}
 		;
 
+		logger.info("DONE!");
 		logger.info("pool: " + pool);
+
+		// clean up CSV writer
+		if (null != out) {
+			try {
+				out.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
 	}
 
 	/**
