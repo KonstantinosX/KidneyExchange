@@ -1,6 +1,6 @@
 package edu.umd.cs.mechdesign.simulator;
 
-import java.util.Comparator;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -20,6 +20,7 @@ import edu.cmu.cs.dickerson.kpd.solver.CycleFormulationCPLEXSolver;
 import edu.cmu.cs.dickerson.kpd.solver.exception.SolverException;
 import edu.cmu.cs.dickerson.kpd.solver.solution.Solution;
 import edu.cmu.cs.dickerson.kpd.structure.Cycle;
+import edu.cmu.cs.dickerson.kpd.structure.Edge;
 import edu.cmu.cs.dickerson.kpd.structure.Pool;
 import edu.cmu.cs.dickerson.kpd.structure.Vertex;
 import edu.cmu.cs.dickerson.kpd.structure.VertexPair;
@@ -39,10 +40,10 @@ public class SimulationDriver {
 
 	public static void main(String[] args) {
 		double m = 3.5;
-		double lambda = 0.1;
+		double lambda = 0.005;
 
 		double arrivalLambda = 0.3;
-		double timeLimit = 100;
+		double timeLimit = 200;
 		// lambda = 5 or 6
 		// // List of m parameters (for every one time period, expect m vertices
 		// to enter, Poisson process)
@@ -68,7 +69,7 @@ public class SimulationDriver {
 
 		arrivalTimeGen = new ExponentialArrivalDistribution(m, r);
 		lifespanTimeGen = new ExponentialArrivalDistribution(lambda, r);
-		transplantTimeGen = new ExponentialArrivalDistribution(lambda, r);
+		transplantTimeGen = new ExponentialArrivalDistribution(m, r);
 		altArrivalTimeGen = new ExponentialArrivalDistribution(arrivalLambda, r);
 
 		double failure_param1 = 0.7; // e.g., constant failure rate of 70%
@@ -211,6 +212,7 @@ public class SimulationDriver {
 				// already in the pool
 				verticesByExitTime.add(new Pair<Double, Vertex>(exitTime, v));
 
+				System.out.println(v + " exit time :" + exitTime);
 			}
 
 		}
@@ -242,13 +244,13 @@ public class SimulationDriver {
 		logger.info("Last entry : " + startingTime);
 
 		/*
-		 * TODO NOTE : Time needs to be relevant with the exit times of the
-		 * vertex pairs that are already in the pool, therefore I guess we can
-		 * attempt to start the simulation at the time the last vertex pair in
-		 * the pool entered the pool, and run it for some time timeLimit after
-		 * that. Also, we're assuming no matchings can happen after the last
-		 * vertex pair has entered. This gives a disadvantage to everyone who's
-		 * already in the pool...
+		 * NOTE : Time needs to be relevant with the exit times of the vertex
+		 * pairs that are already in the pool, therefore I guess we can attempt
+		 * to start the simulation at the time the last vertex pair in the pool
+		 * entered the pool, and run it for some time timeLimit after that.
+		 * Also, we're assuming no matchings can happen after the last vertex
+		 * pair has entered. This gives a disadvantage to everyone who's already
+		 * in the pool...
 		 * 
 		 * The simulation could (and most likely will) start with the first
 		 * death from the previous pool
@@ -362,10 +364,52 @@ public class SimulationDriver {
 				 */
 				Iterator<Pair<Double, Cycle>> it = cycleTransplantTimes
 						.iterator();
+				Pair<Double, Cycle> newAddition = null;
+
 				while (it.hasNext()) {
 					Pair<Double, Cycle> cc = it.next();
-					if (Cycle.isAChain(cc.getRight(), pool)) {
-						// TODO How do we handle chains?
+					Cycle c = cc.getRight();
+					if (Cycle.isAChain(c, pool)) {
+						if (Cycle.getConstituentVertices(c, pool).contains(
+								toRemove)) {
+							logger.info("Breaking a chain! " + c
+									+ " for removing " + toRemove);
+
+							/*
+							 * How do we handle chains? We probably need to
+							 * break the chain at the patient tha we lost, and
+							 * do the transplan on the chain up until this
+							 * patient only
+							 * 
+							 * a chain is 2 -> A, 3 -> 2, 4 -> 3, 5 -> 4, A-> 5
+							 * (begins and ends with the altruist) where A is
+							 * the altruist
+							 */
+							List<Edge> chainEdges = new ArrayList<>();
+							Iterator<Edge> chainIter = c.getEdges().iterator();
+
+							/*
+							 * Get the portion of the chain before the patient
+							 * that we're removing
+							 */
+							while (chainIter.hasNext()) {
+								Edge e = chainIter.next();
+
+								if (e.getSrc().equals(toRemove.toString())) {
+									break;
+								} else {
+									chainEdges.add(e);
+								}
+							}
+							Cycle brokenChain = Cycle.makeCycle(chainEdges,
+									c.getWeight());
+
+							newAddition = new Pair<>(cc.getLeft(), brokenChain);
+						}
+
+						// reomve the old chain
+						// it.remove();
+
 					} else {
 
 						/*
@@ -377,6 +421,14 @@ public class SimulationDriver {
 							it.remove();
 						}
 					}
+
+				}
+				/*
+				 * add the new broken chain to the queue with the same scheduled
+				 * time
+				 */
+				if (newAddition != null) {
+					cycleTransplantTimes.add(newAddition);
 				}
 
 			}
@@ -403,6 +455,8 @@ public class SimulationDriver {
 				double exitTime = currTime + lifespanTimeGen.draw();
 				verticesByExitTime
 						.add(new Pair<Double, Vertex>(exitTime, toAdd));
+
+				System.out.println(toAdd + " exit time :" + exitTime);
 			}
 
 			// check if it's time to do matchings
@@ -412,8 +466,7 @@ public class SimulationDriver {
 
 				/*
 				 * add cycles and the time they should happen to the priority
-				 * queue TODO make this more sophisticated, it doesn't make
-				 * sense to do the cycles simple in the order we found them
+				 * queue. Schedule them within the next x weeks at random
 				 */
 
 				/*
@@ -424,18 +477,15 @@ public class SimulationDriver {
 				/*
 				 * Add the new matchings to the queue of matchings that should
 				 * happen.
-				 * 
-				 * TODO the time of the transplant is going to be some interval
-				 * in the near future (is this correct?)
 				 */
 				for (Cycle c : s.getMatching()) {
 					cycleTransplantTimes.add(new Pair<Double, Cycle>(
 							(currTime + transplantTimeGen.draw()), c));
 				}
 
-				// System.out.println(cycleTransplantTimes);
+				// TODO schedule chains seperately
+
 				logger.info("State of pool: " + pool);
-				// System.exit(0);
 			}
 
 			if (currEvent.getType().equals(EventType.CONDUCT_TRANSPLANT)) {
@@ -443,7 +493,7 @@ public class SimulationDriver {
 
 				/*
 				 * TODO conducting a transplant means removing the patients from
-				 * the pool properly (is this correct?)
+				 * the pool properly. With some probability someone backs out.
 				 * 
 				 * We don't need to remove the exit event from the
 				 * vertexExitevents queue, because we check if the vertex is
@@ -518,7 +568,7 @@ public class SimulationDriver {
 		}
 	}
 
-	private static Solution conductMatches(Pool pool, CycleGenerator cg,
+	public static Solution conductMatches(Pool pool, CycleGenerator cg,
 			int cycleCap, int chainCap) {
 		logger.info("State of the Pool: " + pool);
 		boolean usingFailureProbabilities = false;
