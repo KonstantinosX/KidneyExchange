@@ -153,6 +153,7 @@ public class SaidmanPoolGenerator extends PoolGenerator {
 
 		return new VertexPair(ID, bloodTypePatient, bloodTypeDonor, isWifePatient, patientCPRA, compatible);
 	}
+	
 
 	/**
 	 * Random rolls an altruistic donor (donor with no attached patient)
