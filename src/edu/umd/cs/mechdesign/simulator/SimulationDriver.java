@@ -1,5 +1,7 @@
 package edu.umd.cs.mechdesign.simulator;
 
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -15,10 +17,14 @@ import edu.cmu.cs.dickerson.kpd.helper.CycleTimeComparator;
 import edu.cmu.cs.dickerson.kpd.helper.IOUtil;
 import edu.cmu.cs.dickerson.kpd.helper.Pair;
 import edu.cmu.cs.dickerson.kpd.helper.VertexTimeComparator;
+import edu.cmu.cs.dickerson.kpd.io.DriverApproxOutput;
+import edu.cmu.cs.dickerson.kpd.io.MatchingSimulationOutput;
+import edu.cmu.cs.dickerson.kpd.io.MatchingSimulationOutput.Col;
 import edu.cmu.cs.dickerson.kpd.solver.CycleFormulationCPLEXSolver;
 import edu.cmu.cs.dickerson.kpd.solver.exception.SolverException;
 import edu.cmu.cs.dickerson.kpd.solver.solution.Solution;
 import edu.cmu.cs.dickerson.kpd.structure.Cycle;
+import edu.cmu.cs.dickerson.kpd.structure.Edge;
 import edu.cmu.cs.dickerson.kpd.structure.Pool;
 import edu.cmu.cs.dickerson.kpd.structure.Vertex;
 import edu.cmu.cs.dickerson.kpd.structure.VertexPair;
@@ -34,10 +40,16 @@ public class SimulationDriver {
 	private static ExponentialArrivalDistribution arrivalTimeGen;
 	private static ExponentialArrivalDistribution lifespanTimeGen;
 	private static ExponentialArrivalDistribution transplantTimeGen;
+	private static ExponentialArrivalDistribution altArrivalTimeGen;
 
 	public static void main(String[] args) {
-		int m = 6;
-		double lambda = 1.0;
+		double m = 3.5;
+		double lambda = 0.005;
+
+		double arrivalLambda = 0.3;
+		double timeLimit = 20;
+
+		String path = "sim_run.csv";
 		// lambda = 5 or 6
 		// // List of m parameters (for every one time period, expect m vertices
 		// to enter, Poisson process)
@@ -61,10 +73,10 @@ public class SimulationDriver {
 		// from Saidman distribution)
 		Random r = new Random();
 
-		// TODO Need some values for m and lambda (look at DriverApprox)
 		arrivalTimeGen = new ExponentialArrivalDistribution(m, r);
 		lifespanTimeGen = new ExponentialArrivalDistribution(lambda, r);
-		transplantTimeGen = new ExponentialArrivalDistribution(lambda, r);
+		transplantTimeGen = new ExponentialArrivalDistribution(m, r);
+		altArrivalTimeGen = new ExponentialArrivalDistribution(arrivalLambda, r);
 
 		double failure_param1 = 0.7; // e.g., constant failure rate of 70%
 
@@ -85,6 +97,12 @@ public class SimulationDriver {
 		int chainCap = 4;
 		int graphSize = 50;
 
+		/**
+		 * The time window in which we should schedule the newly matched
+		 * transplants
+		 * */
+		int schedulingTime = 12;
+
 		// IOUtil.dPrintln("\n*****\nGraph (|V|=" + graphSize + ", #" + graphRep
 		// + "/" + numGraphReps + "), cap: " + chainCap + ", gen: "
 		// + gen.getClass().getSimpleName() + "\n*****\n");
@@ -93,12 +111,16 @@ public class SimulationDriver {
 		int numPairs = (int) Math.round(graphSize * 0.95);
 		int numAlts = graphSize - numPairs;
 
-		/*
-		 * TODO this pool should be one where no further cycle matches can be
-		 * made anymore (continuously run the matching, until no new matchings
-		 * are found and then start the simulation with that pool)
-		 */
 		Pool pool = SaidmanGen.generate(numPairs, numAlts);
+
+		/*
+		 * Conducts all possible matchings in the initial pool so that the pool
+		 * we use to start the simulation is stable (no further matches can
+		 * happen)
+		 */
+		CycleGenerator cg = new CycleGenerator(pool);
+
+		conductAllRemainingTransplants(pool, cg, cycleCap, chainCap);
 
 		logger.info("Pool: " + pool);
 		logger.info("Altruists: " + pool.getAltruists());
@@ -110,14 +132,19 @@ public class SimulationDriver {
 					failure_param1);
 		}
 
-		CycleGenerator cg = new CycleGenerator(pool);
-
 		// ====== SIMULATION ======
 
 		double currTime = 0.0;
 		Event currEvent = null;
 		double lastExitTime = -1;
-		double timeLimit = 30;
+
+		MatchingSimulationOutput out;
+		try {
+			out = new MatchingSimulationOutput(path);
+		} catch (IOException e) {
+			e.printStackTrace();
+			return;
+		}
 
 		/**
 		 * vertexID -> (arrivalTime, maxDepartureTime) This will be updated
@@ -139,6 +166,20 @@ public class SimulationDriver {
 		 * prioritized by entryTime
 		 */
 		Queue<Pair<Double, Vertex>> verticesByEntryTime = new PriorityQueue<Pair<Double, Vertex>>(
+				(int) timeLimit, new VertexTimeComparator());
+
+		/**
+		 * A priority queue that maintains the entry events for new altruists
+		 * that are supposed to come into the system prioritized by entryTime
+		 */
+		Queue<Double> altEvents = new PriorityQueue<Double>((int) timeLimit);
+
+		/**
+		 * A priority queue that maintains the altruists that are supposed to
+		 * come into the system prioritized by entryTime. We add new entries in
+		 * this queue when we add the altruist vertices
+		 */
+		Queue<Pair<Double, Vertex>> altruistsByEntryTime = new PriorityQueue<Pair<Double, Vertex>>(
 				(int) timeLimit, new VertexTimeComparator());
 
 		/**
@@ -191,13 +232,39 @@ public class SimulationDriver {
 				// already in the pool
 				verticesByExitTime.add(new Pair<Double, Vertex>(exitTime, v));
 
+				System.out.println(v + " exit time :" + exitTime);
+			}
+			out.set(Col.VERTEX_ID, v.toString());
+			// Write the row of data
+			try {
+				out.record();
+			} catch (IOException e) {
+				IOUtil.dPrintln("Had trouble writing experimental output to file.  We assume this kills everything; quitting.");
+				e.printStackTrace();
+				System.exit(-1);
 			}
 
 		}
 
+		// schedule the arrival of altruists
+		double altrTime = currTime;
+		while (true) {
+
+			double entryTime = altrTime + altArrivalTimeGen.draw();
+			altrTime = entryTime;
+
+			if (altrTime > timeLimit) {
+				/*
+				 * If this vertex would arrive after the time limit, we're done
+				 * generating
+				 */
+				break;
+			}
+
+			altEvents.add(entryTime);
+		}
+
 		/*
-		 * TODO currently almost everyone who was at the pool beforehand dies as
-		 * soon as the simulation begins..
 		 * 
 		 * set the starting time of the simulation as the last entry time from
 		 * the individuals in the initial pool
@@ -206,13 +273,13 @@ public class SimulationDriver {
 		logger.info("Last entry : " + startingTime);
 
 		/*
-		 * TODO NOTE : Time needs to be relevant with the exit times of the
-		 * vertex pairs that are already in the pool, therefore I guess we can
-		 * attempt to start the simulation at the time the last vertex pair in
-		 * the pool entered the pool, and run it for some time timeLimit after
-		 * that. Also, we're assuming no matchings have happened before the last
-		 * vertex pair has entered. This gives a disadvantage to everyone who's
-		 * already in the pool...
+		 * NOTE : Time needs to be relevant with the exit times of the vertex
+		 * pairs that are already in the pool, therefore I guess we can attempt
+		 * to start the simulation at the time the last vertex pair in the pool
+		 * entered the pool, and run it for some time timeLimit after that.
+		 * Also, we're assuming no matchings can happen after the last vertex
+		 * pair has entered. This gives a disadvantage to everyone who's already
+		 * in the pool...
 		 * 
 		 * The simulation could (and most likely will) start with the first
 		 * death from the previous pool
@@ -237,9 +304,10 @@ public class SimulationDriver {
 
 		System.out.println("Entry time of the last patient: " + currTime);
 
-		// add new arrivals that will take place afterwards (only add pairs not
-		// altruists for now)
-		// TODO with some probability, add an altruist
+		/*
+		 * add new arrivals that will take place afterwards (only add pairs not
+		 * altruists for now)
+		 */
 		logger.info("Scheduling new vertex pair arrivals...");
 		while (true) {
 
@@ -281,7 +349,7 @@ public class SimulationDriver {
 		// the next event can't be a transplant because we haven't had any
 		// matchings yet
 		currEvent = Event.getNextEvent(matchingTimes, cycleTransplantTimes,
-				verticesByExitTime, verticesByEntryTime);
+				verticesByExitTime, verticesByEntryTime, altEvents);
 
 		/*
 		 * the first event is probably going to be a death event from the
@@ -296,6 +364,8 @@ public class SimulationDriver {
 		System.out.println("CycleTransplant Times: " + cycleTransplantTimes);
 		System.out.println("VerticesBy Exit Time: " + verticesByExitTime);
 		System.out.println("VerticesBy Entry Time: " + verticesByEntryTime);
+
+		System.out.println("Altruist Events " + altEvents);
 		logger.info("State of the Pool: " + pool);
 		// System.exit(0);
 
@@ -323,10 +393,59 @@ public class SimulationDriver {
 				 */
 				Iterator<Pair<Double, Cycle>> it = cycleTransplantTimes
 						.iterator();
+				Pair<Double, Cycle> newAddition = null;
+
 				while (it.hasNext()) {
 					Pair<Double, Cycle> cc = it.next();
-					if (Cycle.isAChain(cc.getRight(), pool)) {
-						// TODO How do we handle chains?
+					Cycle c = cc.getRight();
+
+					/*
+					 * NOTE TODO this is probably unnecessairy (although still
+					 * correct) since we'll have to schedule each transplant in
+					 * each chain independantly ( they don't need to happen at
+					 * the same time)
+					 */
+					if (Cycle.isAChain(c, pool)) {
+						if (Cycle.getConstituentVertices(c, pool).contains(
+								toRemove)) {
+							logger.info("Breaking a chain! " + c
+									+ " for removing " + toRemove);
+
+							/*
+							 * How do we handle chains? We probably need to
+							 * break the chain at the patient tha we lost, and
+							 * do the transplan on the chain up until this
+							 * patient only
+							 * 
+							 * a chain is 2 -> A, 3 -> 2, 4 -> 3, 5 -> 4, A-> 5
+							 * (begins and ends with the altruist) where A is
+							 * the altruist
+							 */
+							List<Edge> chainEdges = new ArrayList<>();
+							Iterator<Edge> chainIter = c.getEdges().iterator();
+
+							/*
+							 * Get the portion of the chain before the patient
+							 * that we're removing
+							 */
+							while (chainIter.hasNext()) {
+								Edge e = chainIter.next();
+
+								if (e.getSrc().equals(toRemove.toString())) {
+									break;
+								} else {
+									chainEdges.add(e);
+								}
+							}
+							Cycle brokenChain = Cycle.makeCycle(chainEdges,
+									c.getWeight());
+
+							newAddition = new Pair<>(cc.getLeft(), brokenChain);
+						}
+
+						// reomve the old chain
+						// it.remove();
+
 					} else {
 
 						/*
@@ -338,6 +457,14 @@ public class SimulationDriver {
 							it.remove();
 						}
 					}
+
+				}
+				/*
+				 * add the new broken chain to the queue with the same scheduled
+				 * time
+				 */
+				if (newAddition != null) {
+					cycleTransplantTimes.add(newAddition);
 				}
 
 			}
@@ -364,6 +491,8 @@ public class SimulationDriver {
 				double exitTime = currTime + lifespanTimeGen.draw();
 				verticesByExitTime
 						.add(new Pair<Double, Vertex>(exitTime, toAdd));
+
+				System.out.println(toAdd + " exit time :" + exitTime);
 			}
 
 			// check if it's time to do matchings
@@ -373,8 +502,7 @@ public class SimulationDriver {
 
 				/*
 				 * add cycles and the time they should happen to the priority
-				 * queue TODO make this more sophisticated, it doesn't make
-				 * sense to do the cycles simple in the order we found them
+				 * queue. Schedule them within the next x weeks at random
 				 */
 
 				/*
@@ -385,17 +513,52 @@ public class SimulationDriver {
 				/*
 				 * Add the new matchings to the queue of matchings that should
 				 * happen.
-				 * 
-				 * TODO the time of the transplant is going to be some interval
-				 * in the near future (is this correct?)
 				 */
 				for (Cycle c : s.getMatching()) {
-					cycleTransplantTimes.add(new Pair<Double, Cycle>(
-							(currTime + transplantTimeGen.draw()), c));
+
+					if (Cycle.isAChain(c, pool)) {
+						logger.info("Got a CHAING! " + c);
+						/* chain */
+						Pair<Double, Cycle> p = null;
+						List<Edge> chainEdges = c.getEdges();
+
+						/*
+						 * Conduct all except for the last transplant in the
+						 * choin (since the last edge in the chani goes back to
+						 * the altruist)
+						 */
+						for (int i = 0; i < chainEdges.size() - 1; i++) {
+
+							Edge e = chainEdges.get(i);
+
+							List<Edge> l = new ArrayList<>();
+							l.add(e);
+							Cycle chainPortion = Cycle.makeCycle(l,
+									c.getWeight());
+
+							/*
+							 * schedule each portion of the chain independently
+							 * from eachother, a single transplant at a time
+							 */
+							Pair<Double, Cycle> pr = new Pair<Double, Cycle>(
+									Event.randomInRange(currTime, currTime
+											+ schedulingTime), chainPortion);
+
+							cycleTransplantTimes.add(pr);
+
+						}
+
+					} else {
+
+						/* schedule cycle */
+						cycleTransplantTimes.add(new Pair<Double, Cycle>(Event
+								.randomInRange(currTime, currTime
+										+ schedulingTime), c));
+					}
+
 				}
 
-				System.out.println(cycleTransplantTimes);
-				System.exit(0);
+				logger.info("State of pool: " + pool);
 			}
 
 			if (currEvent.getType().equals(EventType.CONDUCT_TRANSPLANT)) {
@@ -403,7 +566,7 @@ public class SimulationDriver {
 
 				/*
 				 * TODO conducting a transplant means removing the patients from
-				 * the pool properly (is this correct?)
+				 * the pool properly. With some probability someone backs out.
 				 * 
 				 * We don't need to remove the exit event from the
 				 * vertexExitevents queue, because we check if the vertex is
@@ -417,22 +580,78 @@ public class SimulationDriver {
 				}
 			}
 
-			// TODO Handle the case where more than one event happens at a
-			// single point in time
+			if (currEvent.getType().equals(EventType.ALTRUIST_ENTERS)) {
 
-			// Queue[] nextEv = { matchingTimes, cycleTransplantTimes,
-			// verticesByExitTime, verticesByEntryTime };
+				int addPair = 0;
+				int addAltruist = 1;
+				Set<Vertex> l = SaidmanGen.addVerticesToPool(pool, addPair,
+						addAltruist);
 
+				// we're only generating one at a time
+				Vertex toAdd = l.iterator().next();
+
+				logger.info("Adding new altruist");
+				logger.info("State of the Pool: " + pool);
+
+				/* adding the altruist by entry time exit time */
+				altruistsByEntryTime.add(new Pair<Double, Vertex>(currTime,
+						toAdd));
+
+				altEvents.poll();
+			}
+
+			//
 			currEvent = Event.getNextEvent(matchingTimes, cycleTransplantTimes,
-					verticesByExitTime, verticesByEntryTime);
+					verticesByExitTime, verticesByEntryTime, altEvents);
 			currTime = currEvent.getTime();
 			// System.exit(0);
 		}
 		;
 
+		logger.info("DONE!");
+		logger.info("pool: " + pool);
+
+		// clean up CSV writer
+		if (null != out) {
+			try {
+				out.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
 	}
 
-	private static Solution conductMatches(Pool pool, CycleGenerator cg,
+	/**
+	 * Does matchings and transplants until there can be no more matchings done
+	 * in the pool
+	 * 
+	 * @param pool
+	 * @param cg
+	 * @param cycleCap
+	 * @param chainCap
+	 */
+	private static void conductAllRemainingTransplants(Pool pool,
+			CycleGenerator cg, int cycleCap, int chainCap) {
+
+		while (true) {
+			Solution s = conductMatches(pool, cg, cycleCap, chainCap);
+
+			/*
+			 * Add the new matchings to the queue of matchings that should
+			 * happen.
+			 */
+			if (s.getMatching().isEmpty())
+				return;
+
+			for (Cycle c : s.getMatching()) {
+				for (Vertex v : Cycle.getConstituentVertices(c, pool)) {
+					pool.removeVertex(v);
+				}
+			}
+		}
+	}
+
+	public static Solution conductMatches(Pool pool, CycleGenerator cg,
 			int cycleCap, int chainCap) {
 		logger.info("State of the Pool: " + pool);
 		boolean usingFailureProbabilities = false;
@@ -465,6 +684,7 @@ public class SimulationDriver {
 			return null;
 		}
 	}
+
 	// Simulation
 	// t is the current time we're at and allocated_time is the maximum time we
 	// should allocate to this simulation (for how long we should run it)
