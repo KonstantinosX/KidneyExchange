@@ -1,29 +1,30 @@
 package edu.umd.cs.mechdesign.simulator;
 
+import edu.cmu.cs.dickerson.kpd.structure.Vertex;
 import edu.cmu.cs.dickerson.kpd.structure.types.BloodType;
 
-public class WaitlistedPatient {
-	protected Integer ID;
+public class WaitlistedPatient extends Vertex{
 	protected double CPRA;
 	protected double Age;
 	protected BloodType bloodTypePatient;
+	double entryTime;
+	
 	
 	
 	public WaitlistedPatient(int ID, double CPRA,double Age,BloodType bloodTypePatient){
-		this.ID = ID;
+		super(ID);
 		this.CPRA = CPRA;
 		this.Age = Age;
 		this.bloodTypePatient = bloodTypePatient;
 	}
 	
-	
-	public Integer getID() {
-		return ID;
+	public double getEntryTime() {
+		return entryTime;
 	}
 
 
-	public void setID(Integer iD) {
-		ID = iD;
+	public void setEntryTime(double entrytime) {
+		entryTime = entrytime;
 	}
 
 
@@ -55,6 +56,16 @@ public class WaitlistedPatient {
 	public void setBloodTypePatient(BloodType bloodTypePatient) {
 		this.bloodTypePatient = bloodTypePatient;
 	}
+
+
+	@Override
+	public boolean isAltruist() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
+
+
 
 
 	

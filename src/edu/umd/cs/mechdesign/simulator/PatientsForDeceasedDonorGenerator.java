@@ -12,17 +12,23 @@ public class PatientsForDeceasedDonorGenerator{
 
 	protected Random random;
 	
-	// probability of the patient being of each blood type (obtained from Saidman Generator)
-	protected double Pr_PATIENT_TYPE_O = 0.4814;
-	protected double Pr_PATIENT_TYPE_A = 0.3373;
-	protected double Pr_PATIENT_TYPE_B = 0.1428;
+	// probability of the patient added to the waiting list being of each blood type 
+	// 2015 source: https://optn.transplant.hrsa.gov/data/view-data-reports/national-data/#
+	protected double Pr_PATIENT_TYPE_O = 0.484817352;
+	protected double Pr_PATIENT_TYPE_A = 0.327597032;
+	protected double Pr_PATIENT_TYPE_B = 0.148373288;
+	protected double Pr_PATIENT_TYPE_AB = 0.039212329;
 	
-	// probability of kidney-disease incidence base on age
-	// source: https://ndt.oxfordjournals.org/content/11/8/1542.full.pdf
-	protected double Pr_PATIENT_19_39 = 0.4471;
-	protected double Pr_PATIENT_40_59 = 0.3010;
-	protected double Pr_PATIENT_60_74 = 0.1699;
-	protected double Pr_PATIENT_75 = 0.0820;
+	// probability of an addition to waiting list being in each age group
+	// 2015 source: https://optn.transplant.hrsa.gov/data/view-data-reports/national-data/#
+	protected double Pr_PATIENT_0_1 = 0.000656093;
+	protected double Pr_PATIENT_1_5 = 0.006075993;
+	protected double Pr_PATIENT_6_10 = 0.00487791;
+	protected double Pr_PATIENT_11_17 = 0.017828617;
+	protected double Pr_PATIENT_18_34 = 0.116157006;
+	protected double Pr_PATIENT_35_49 = 0.265175719;
+	protected double Pr_PATIENT_50_64 = 0.411912369;
+	protected double Pr_PATIENT_65 = 0.177316294;
 	
 	private int currentID;
 	
@@ -45,25 +51,47 @@ public class PatientsForDeceasedDonorGenerator{
 	
 	/**
 	 * Draws a random patient's age 
+	 * 
+	 * we assume that in each age range, each age in uniformally distributed
+	 * 
 	 * @return Age
 	 */
 	private double drawPatientAge() {
 		double r = random.nextDouble();
 		double age;
-		if (r <= Pr_PATIENT_19_39) {
+		if (r <= Pr_PATIENT_0_1) {
 			double r1 = random.nextDouble();
-			age = 19 + 21*r1;
+			age = 1*r1;
 			return age; }
-		if (r <= Pr_PATIENT_19_39 + Pr_PATIENT_40_59) {
+		else if (r <= Pr_PATIENT_0_1+Pr_PATIENT_1_5) {
 			double r1 = random.nextDouble();
-			age =  40 + 20*r1;
+			age = 1 + 4*r1;
 			return age; }
-		if (r <= Pr_PATIENT_19_39 + Pr_PATIENT_40_59 + Pr_PATIENT_60_74) {
+		else if (r <= Pr_PATIENT_0_1+Pr_PATIENT_1_5+Pr_PATIENT_6_10) {
 			double r1 = random.nextDouble();
-			age =  60 + 15*r1;
+			age = 5 + 5*r1;
 			return age; }
-		double r1 = random.nextDouble();
-		age =  60 + 15*r1;
+		else if (r <= Pr_PATIENT_0_1+Pr_PATIENT_1_5+Pr_PATIENT_6_10+Pr_PATIENT_11_17) {
+			double r1 = random.nextDouble();
+			age = 10 + 7*r1;
+			return age; }
+		else if (r <= Pr_PATIENT_0_1+Pr_PATIENT_1_5+Pr_PATIENT_6_10+Pr_PATIENT_11_17+Pr_PATIENT_18_34) {
+			double r1 = random.nextDouble();
+			age = 17 + 17*r1;
+			return age; }
+		else if (r <= Pr_PATIENT_0_1+Pr_PATIENT_1_5+Pr_PATIENT_6_10+Pr_PATIENT_11_17+Pr_PATIENT_18_34+Pr_PATIENT_35_49) {
+			double r1 = random.nextDouble();
+			age = 34 + 15*r1;
+			return age; }
+		else if (r <= Pr_PATIENT_0_1+Pr_PATIENT_1_5+Pr_PATIENT_6_10+Pr_PATIENT_11_17+Pr_PATIENT_18_34+Pr_PATIENT_35_49+Pr_PATIENT_50_64) {
+			double r1 = random.nextDouble();
+			age = 49 + 15*r1;
+			return age; }
+		else{
+			double r1 = random.nextDouble();
+			age =  65 + 15*r1;
+		}
+
 		return age;
 	}
 
@@ -135,14 +163,14 @@ public class PatientsForDeceasedDonorGenerator{
 	
 	
 	/*
-	 * Adds new patients in Waiting list
+	 * Adds new patient in Waiting list
 	 */
-	public HashMap<BloodType, List<WaitlistedPatient>> addPatient(HashMap<BloodType, List<WaitlistedPatient>> myHashMap,int NumPatients){
-		for(int i=1; i<=NumPatients; i++){
+	public WaitlistedPatient addPatient(HashMap<BloodType, List<WaitlistedPatient>> myHashMap){
+
 			WaitlistedPatient newPatient = generatePatient(++currentID);
 			myHashMap.get(newPatient.getBloodTypePatient()).add(newPatient);
-		}
-		return myHashMap;
+
+		return newPatient;
 	}
 	
 	
@@ -155,7 +183,7 @@ public class PatientsForDeceasedDonorGenerator{
 		WaitlistedPatient foundPatient = null;
 		
 		for (WaitlistedPatient w : myHashMap.get(BloodType.O)){
-			if(w.ID == ID){
+			if(w.getID() == ID){
 				foundPatient = w;
 				break;
 			}
@@ -166,7 +194,7 @@ public class PatientsForDeceasedDonorGenerator{
 		}
 		else{
 			for (WaitlistedPatient w : myHashMap.get(BloodType.A)){
-				if(w.ID == ID){
+				if(w.getID() == ID){
 					foundPatient = w;
 					break;
 				}
@@ -177,7 +205,7 @@ public class PatientsForDeceasedDonorGenerator{
 			}
 			else{
 				for (WaitlistedPatient w : myHashMap.get(BloodType.B)){
-					if(w.ID == ID){
+					if(w.getID() == ID){
 						foundPatient = w;
 						break;
 					}
@@ -188,7 +216,7 @@ public class PatientsForDeceasedDonorGenerator{
 				}
 				else{
 					for (WaitlistedPatient w : myHashMap.get(BloodType.AB)){
-						if(w.ID == ID){
+						if(w.getID() == ID){
 							foundPatient = w;
 							break;
 						}
@@ -208,4 +236,35 @@ public class PatientsForDeceasedDonorGenerator{
 
 	}
 	
+	
+	
+	/*
+	 * Checks if patient with particular ID is in the list
+	 */
+	
+	public boolean IsInWaitingList(HashMap<BloodType, List<WaitlistedPatient>> myHashMap, int ID){
+		
+		for (WaitlistedPatient w : myHashMap.get(BloodType.O)){
+			if(w.getID() == ID){
+				return true;
+			}
+		}
+		for (WaitlistedPatient w : myHashMap.get(BloodType.A)){
+			if(w.getID() == ID){
+				return true;
+			}
+		}
+		for (WaitlistedPatient w : myHashMap.get(BloodType.B)){
+			if(w.getID() == ID){
+				return true;
+			}
+		}
+		for (WaitlistedPatient w : myHashMap.get(BloodType.AB)){
+			if(w.getID() == ID){
+				return true;
+			}
+		}
+		return false;
+
+	}
 }

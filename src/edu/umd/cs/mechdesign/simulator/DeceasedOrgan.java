@@ -1,25 +1,20 @@
 package edu.umd.cs.mechdesign.simulator;
 
 
+import edu.cmu.cs.dickerson.kpd.structure.Vertex;
 import edu.cmu.cs.dickerson.kpd.structure.types.BloodType;
 
-public class DeceasedOrgan {
-	protected Integer ID;
+public class DeceasedOrgan extends Vertex {
 	protected double DPI;
 	protected BloodType bloodTypeDonor;
 	
 	public DeceasedOrgan(int ID, double DPI,BloodType bloodTypeDonor){
-		this.ID = ID;
+		super(ID);
 		this.DPI = DPI;
 		this.bloodTypeDonor = bloodTypeDonor;
 	}
 
-	public Integer getID() {
-		return ID;
-	}
-	public void setID(Integer iD) {
-		ID = iD;
-	}
+	
 	public double getDPI() {
 		return DPI;
 	}
@@ -31,6 +26,13 @@ public class DeceasedOrgan {
 	}
 	public void setBloodTypeDonor(BloodType bloodTypeDonor) {
 		this.bloodTypeDonor = bloodTypeDonor;
+	}
+
+
+	@Override
+	public boolean isAltruist() {
+		// TODO Auto-generated method stub
+		return false;
 	}
 
 }
