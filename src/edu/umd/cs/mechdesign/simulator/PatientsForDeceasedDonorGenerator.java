@@ -131,13 +131,15 @@ public class PatientsForDeceasedDonorGenerator {
 	}
 
 	/*
-	 * Generates a patient
+	 * Generates a patient (always assume that the patient is not an altruist)
 	 */
 	public WaitlistedPatient generatePatient(int ID) {
 		BloodType bloodTypePatient = drawPatientBloodType();
 		double Age = drawPatientAge();
 		double CPRA = drawCPRA();
-		return new WaitlistedPatient(ID, CPRA, Age, bloodTypePatient);
+		boolean IsAnAltruist = false;
+		return new WaitlistedPatient  (ID,CPRA,Age,bloodTypePatient, IsAnAltruist);
+
 	}
 
 	/*

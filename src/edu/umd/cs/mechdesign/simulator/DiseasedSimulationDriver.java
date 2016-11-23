@@ -89,7 +89,7 @@ public class DiseasedSimulationDriver {
 		double lastExitTime = -1;
 		//run time in weeks
 		double timeLimit = 520; //10 years
-		
+		double deceasedSimulationZeroTime;
 		
 		
 		/**
@@ -169,8 +169,25 @@ public class DiseasedSimulationDriver {
 			patientsByExitTime.add(new Pair<Double, Vertex>(exitTime, w));
 			patientsByEntryTime.add(new Pair<Double, Vertex>(entryTime, w));
 		}
+		deceasedSimulationZeroTime = currTime;
 		total_exit_times_of_initial=patientsByExitTime.size();
 		total_entry_times_of_initial=patientsByEntryTime.size();
+		
+		
+		// schedule arrival of altruistic donors
+		
+		   
+		
+		
+		
+		
+		
+		// schedule departure of patients getting a living donor kidney
+		
+		
+		
+		
+		
 		
 		
 		// schedule arrival of organs 

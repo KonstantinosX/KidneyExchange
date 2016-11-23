@@ -8,14 +8,18 @@ public class WaitlistedPatient extends Vertex{
 	protected double Age;
 	protected BloodType bloodTypePatient;
 	double entryTime;
+	boolean IsAnAltruist;
 	
 	
 	
-	public WaitlistedPatient(int ID, double CPRA,double Age,BloodType bloodTypePatient){
+
+
+	public WaitlistedPatient(int ID, double CPRA,double Age,BloodType bloodTypePatient, boolean IsAnAltruist){
 		super(ID);
 		this.CPRA = CPRA;
 		this.Age = Age;
 		this.bloodTypePatient = bloodTypePatient;
+		this.IsAnAltruist = IsAnAltruist;
 	}
 	
 	public double getEntryTime() {
@@ -57,6 +61,15 @@ public class WaitlistedPatient extends Vertex{
 		this.bloodTypePatient = bloodTypePatient;
 	}
 
+
+
+	public boolean isIsAnAltruist() {
+		return IsAnAltruist;
+	}
+
+	public void setIsAnAltruist(boolean isAnAltruist) {
+		IsAnAltruist = isAnAltruist;
+	}
 
 	@Override
 	public boolean isAltruist() {
