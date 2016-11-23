@@ -2,10 +2,11 @@ package edu.umd.cs.mechdesign.simulator;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Random;
@@ -17,8 +18,8 @@ import edu.cmu.cs.dickerson.kpd.helper.CycleTimeComparator;
 import edu.cmu.cs.dickerson.kpd.helper.IOUtil;
 import edu.cmu.cs.dickerson.kpd.helper.Pair;
 import edu.cmu.cs.dickerson.kpd.helper.VertexTimeComparator;
-import edu.cmu.cs.dickerson.kpd.io.DriverApproxOutput;
 import edu.cmu.cs.dickerson.kpd.io.MatchingSimulationOutput;
+import edu.cmu.cs.dickerson.kpd.io.PatientTransplantOutput;
 import edu.cmu.cs.dickerson.kpd.io.MatchingSimulationOutput.Col;
 import edu.cmu.cs.dickerson.kpd.solver.CycleFormulationCPLEXSolver;
 import edu.cmu.cs.dickerson.kpd.solver.exception.SolverException;
@@ -41,15 +42,26 @@ public class SimulationDriver {
 	private static ExponentialArrivalDistribution lifespanTimeGen;
 	private static ExponentialArrivalDistribution transplantTimeGen;
 	private static ExponentialArrivalDistribution altArrivalTimeGen;
+	private static ExponentialArrivalDistribution oldLifespanTimeGen;
+	private static ExponentialArrivalDistribution youngLifespanTimeGen;
 
 	public static void main(String[] args) {
 		double m = 3.5;
-		double lambda = 0.005;
+
+		// younger than 60
+		double lambda_young = 0.002403846;
+
+		// younger than 60
+		double lambda_old = 0.004273504;
 
 		double arrivalLambda = 0.3;
 		double timeLimit = 20;
 
 		String path = "sim_run.csv";
+
+		String transplantsPath = "transplants.csv";
+		String altruistsPath = "altruists.csv";
+
 		// lambda = 5 or 6
 		// // List of m parameters (for every one time period, expect m vertices
 		// to enter, Poisson process)
@@ -73,8 +85,14 @@ public class SimulationDriver {
 		// from Saidman distribution)
 		Random r = new Random();
 
+		PatientsForDeceasedDonorGenerator ageGen = new PatientsForDeceasedDonorGenerator(
+				r);
+
 		arrivalTimeGen = new ExponentialArrivalDistribution(m, r);
-		lifespanTimeGen = new ExponentialArrivalDistribution(lambda, r);
+		oldLifespanTimeGen = new ExponentialArrivalDistribution(lambda_old, r);
+		youngLifespanTimeGen = new ExponentialArrivalDistribution(lambda_young,
+				r);
+
 		transplantTimeGen = new ExponentialArrivalDistribution(m, r);
 		altArrivalTimeGen = new ExponentialArrivalDistribution(arrivalLambda, r);
 
@@ -152,7 +170,7 @@ public class SimulationDriver {
 		 */
 		// Map<Integer, Pair<Double, Double>> patientTimes = new
 		// HashMap<Integer, Pair<Double, Double>>();
-		Set<Integer> patients = new HashSet<Integer>();
+		// Set<Integer> patients = new HashSet<Integer>();
 
 		/**
 		 * A priority queue that maintains pairs (exitTime, vertex), prioritized
@@ -167,6 +185,20 @@ public class SimulationDriver {
 		 */
 		Queue<Pair<Double, Vertex>> verticesByEntryTime = new PriorityQueue<Pair<Double, Vertex>>(
 				(int) timeLimit, new VertexTimeComparator());
+
+		/**
+		 * An array list that keeps track of the entry times of all patients in
+		 * the pool (mostly in order to send over this list to the decased donor
+		 * list simulation (our custom one or KPSAM) and integrate with that)
+		 */
+		List<Pair<Double, Vertex>> patientsByEntryTime = new ArrayList<>();
+
+		/**
+		 * An array list that keeps track of the exit times of all patients in
+		 * the pool (mostly in order to send over this list to the decased donor
+		 * list simulation (our custom one or KPSAM) and integrate with that)
+		 */
+		Map<String, Double> patientsByExitTime = new HashMap<>();
 
 		/**
 		 * A priority queue that maintains the entry events for new altruists
@@ -190,6 +222,16 @@ public class SimulationDriver {
 				1, new CycleTimeComparator());
 		Queue<Double> matchingTimes = new LinkedList<Double>();
 
+		/* keeps track of when each transplant happened on which patient */
+		Map<Vertex, Double> transplantTimes = new HashMap<>();
+
+		/**
+		 * Keeps track of the age of each patient ( don't want to alter
+		 * VertexPair or add a new class because that may require major
+		 * refactoring of the solver code etc)
+		 */
+		Map<String, Double> patientAges = new HashMap<>();
+
 		/*
 		 * create initial entry and exit times for the individuals already in
 		 * the pool
@@ -200,40 +242,49 @@ public class SimulationDriver {
 			 * get the times at which the patients/donor pairs enter the pool
 			 * and exit the pool (by means of death :-/)
 			 */
-			if (!patients.contains(v.getID())) {
 
+			/*
+			 * Draw arrival and departure times from exponential clocks It is
+			 * okay if entryTime == exitTime; the vertex enters and is critical
+			 * simultaneously
+			 */
+			double age = ageGen.drawPatientAge();
+			double entryTime = currTime + arrivalTimeGen.draw();
+			double exitTime = entryTime + getLifespan(age);
+			currTime = entryTime;
+
+			if (currTime > timeLimit) {
 				/*
-				 * Draw arrival and departure times from exponential clocks It
-				 * is okay if entryTime == exitTime; the vertex enters and is
-				 * critical simultaneously
+				 * If this vertex would arrive after the time limit, we're done
+				 * generating
 				 */
-				double entryTime = currTime + arrivalTimeGen.draw();
-				double exitTime = entryTime + lifespanTimeGen.draw();
-				currTime = entryTime;
-
-				if (currTime > timeLimit) {
-					/*
-					 * If this vertex would arrive after the time limit, we're
-					 * done generating
-					 */
-					break;
-				}
-				if (exitTime > lastExitTime) {
-					/*
-					 * Store the exit time of the final vertex in the pool
-					 * (after all other vertices have gone critical)
-					 */
-					lastExitTime = exitTime;
-				}
-
-				patients.add(v.getID());
-
-				// we don't care when these vertices entered, because they're
-				// already in the pool
-				verticesByExitTime.add(new Pair<Double, Vertex>(exitTime, v));
-
-				System.out.println(v + " exit time :" + exitTime);
+				break;
 			}
+			if (exitTime > lastExitTime) {
+				/*
+				 * Store the exit time of the final vertex in the pool (after
+				 * all other vertices have gone critical)
+				 */
+				lastExitTime = exitTime;
+			}
+
+			/*
+			 * we don't care when these vertices entered, because they're
+			 * already in the pool
+			 */
+			verticesByExitTime.add(new Pair<Double, Vertex>(exitTime, v));
+
+			/* record the exit time */
+			patientsByExitTime.put(v.toString(), exitTime);
+
+			/* record the entry time */
+			patientsByEntryTime.add(new Pair<Double, Vertex>(entryTime, v));
+
+			/* record age */
+			patientAges.put(v.getID().toString(), age);
+
+			System.out.println(v + " exit time :" + exitTime);
+			// }
 			out.set(Col.VERTEX_ID, v.toString());
 			// Write the row of data
 			try {
@@ -245,6 +296,13 @@ public class SimulationDriver {
 			}
 
 		}
+
+		/*
+		 * set the starting time of the simulation as the last entry time from
+		 * the individuals in the initial pool
+		 */
+		double startingTime = currTime;
+		logger.info("Last entry : " + startingTime);
 
 		// schedule the arrival of altruists
 		double altrTime = currTime;
@@ -263,14 +321,6 @@ public class SimulationDriver {
 
 			altEvents.add(entryTime);
 		}
-
-		/*
-		 * 
-		 * set the starting time of the simulation as the last entry time from
-		 * the individuals in the initial pool
-		 */
-		double startingTime = currTime;
-		logger.info("Last entry : " + startingTime);
 
 		/*
 		 * NOTE : Time needs to be relevant with the exit times of the vertex
@@ -317,7 +367,7 @@ public class SimulationDriver {
 			 * simultaneously
 			 */
 			double entryTime = currTime + arrivalTimeGen.draw();
-			double exitTime = entryTime + lifespanTimeGen.draw();
+			// double exitTime = entryTime + lifespanTimeGen.draw();
 			currTime = entryTime;
 
 			if (currTime > timeLimit) {
@@ -327,13 +377,13 @@ public class SimulationDriver {
 				 */
 				break;
 			}
-			if (exitTime > lastExitTime) {
-				/*
-				 * Store the exit time of the final vertex in the pool (after
-				 * all other vertices have gone critical)
-				 */
-				lastExitTime = exitTime;
-			}
+			// if (exitTime > lastExitTime) {
+			// /*
+			// * Store the exit time of the final vertex in the pool (after
+			// * all other vertices have gone critical)
+			// */
+			// lastExitTime = exitTime;
+			// }
 
 			/*
 			 * add times to the appropriate queues. Initially the vertex pair to
@@ -487,10 +537,22 @@ public class SimulationDriver {
 
 				logger.info("Adding new patient");
 				logger.info("State of the Pool: " + pool);
+
 				/* setting exit time */
-				double exitTime = currTime + lifespanTimeGen.draw();
+				double age = ageGen.drawPatientAge();
+				double exitTime = currTime + getLifespan(age);
 				verticesByExitTime
 						.add(new Pair<Double, Vertex>(exitTime, toAdd));
+
+				/* record the entry time and vertex */
+				patientsByEntryTime.add(new Pair<Double, Vertex>(currTime,
+						toAdd));
+
+				/* record the entry time and vertex */
+				patientsByExitTime.put(toAdd.toString(), exitTime);
+
+				/* record age */
+				patientAges.put(toAdd.toString(), age);
 
 				System.out.println(toAdd + " exit time :" + exitTime);
 			}
@@ -519,7 +581,6 @@ public class SimulationDriver {
 					if (Cycle.isAChain(c, pool)) {
 						logger.info("Got a CHAING! " + c);
 						/* chain */
-						Pair<Double, Cycle> p = null;
 						List<Edge> chainEdges = c.getEdges();
 
 						/*
@@ -577,6 +638,7 @@ public class SimulationDriver {
 				for (Vertex v : Cycle
 						.getConstituentVertices(toTransplant, pool)) {
 					pool.removeVertex(v);
+					transplantTimes.put(v, currTime);
 				}
 			}
 
@@ -598,18 +660,28 @@ public class SimulationDriver {
 						toAdd));
 
 				altEvents.poll();
+
+				patientAges.put(toAdd.toString(), ageGen.drawPatientAge());
 			}
 
-			//
 			currEvent = Event.getNextEvent(matchingTimes, cycleTransplantTimes,
 					verticesByExitTime, verticesByEntryTime, altEvents);
 			currTime = currEvent.getTime();
-			// System.exit(0);
 		}
 		;
 
 		logger.info("DONE!");
 		logger.info("pool: " + pool);
+		System.out.println("exit tiems: " + patientsByExitTime);
+		System.out.println("entry tiems: " + patientsByEntryTime);
+		
+		System.out.println("STASRTING TIME : "+startingTime);
+
+		Utils.serializeTransplants(transplantsPath, transplantTimes,
+				startingTime);
+
+		Utils.serializeAltruists(altruistsPath, patientAges,
+				altruistsByEntryTime, startingTime);
 
 		// clean up CSV writer
 		if (null != out) {
@@ -682,6 +754,21 @@ public class SimulationDriver {
 			e.printStackTrace();
 			System.exit(-1);
 			return null;
+		}
+	}
+
+	/**
+	 * Given the age of a patient, this returns the appropriate lifespan /
+	 * dialysis time.
+	 * 
+	 * @param age
+	 * @return
+	 */
+	private static double getLifespan(double age) {
+		if (age > 60) {
+			return oldLifespanTimeGen.draw();
+		} else {
+			return youngLifespanTimeGen.draw();
 		}
 	}
 
