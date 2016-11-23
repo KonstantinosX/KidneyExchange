@@ -45,6 +45,8 @@ public class DeceasedEvent {
 	public static DeceasedEvent getNextDeceasedEvent(
 			Queue<Pair<Double, Vertex>> patientsByExitTime,
 			Queue<Pair<Double, Vertex>> patientsByEntryTime,
+			Queue<Pair<Double, WaitlistedPatient>> altruistsByEntryTime,
+			Queue<Pair<Double, WaitlistedPatient>> patientsByLeavingTime,
 			Queue<Double> organEvents) {
 
 		// TODO stub for baseline simulation
@@ -56,12 +58,20 @@ public class DeceasedEvent {
 		double patientDeparture = Double.MAX_VALUE;
 		if (!patientsByExitTime.isEmpty())
 			patientDeparture = patientsByExitTime.peek().getLeft();
+		
+		double altruistArrival = Double.MAX_VALUE;
+		if (!altruistsByEntryTime.isEmpty())
+			altruistArrival = altruistsByEntryTime.peek().getLeft();
+		
+		double patientGotLDK = Double.MAX_VALUE;
+		if (!patientsByLeavingTime.isEmpty())
+			patientGotLDK = patientsByLeavingTime.peek().getLeft();
 
 		double organArrives = Double.MAX_VALUE;
 		if (!organEvents.isEmpty())
 			organArrives = organEvents.peek();
 
-		Double[] timesList = { patientDeparture, newPatientArrival, organArrives };
+		Double[] timesList = { patientDeparture, newPatientArrival,altruistArrival,patientGotLDK, organArrives };
 
 		int minIndex = MathUtil.minIndex(Arrays.asList(timesList));
 		Double time = timesList[minIndex];
@@ -76,6 +86,14 @@ public class DeceasedEvent {
 			patientsByEntryTime.poll();
 			break;
 		case 2:
+			type = DeceasedEventType.ALTRUIST_GETS_SICK;
+			//altruistsByEntryTime.poll();
+			break;
+		case 3:
+			type = DeceasedEventType.PATIENT_GETS_LDK;
+			//patientsByLeavingTime.poll();
+			break;
+		case 4:
 			type = DeceasedEventType.ORGAN_ARRIVES;
 			organEvents.poll();
 			break;

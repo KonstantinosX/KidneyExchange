@@ -47,6 +47,11 @@ public class PatientsForDeceasedDonorGenerator {
 		this.random = random;
 	}
 
+	protected int getNewID(){
+		return ++currentID;
+	}
+	
+	
 	/**
 	 * Draws a random patient's age
 	 * 
@@ -104,7 +109,7 @@ public class PatientsForDeceasedDonorGenerator {
 	 * @return CPRA
 	 */
 	// assume uniform distribution
-	private double drawCPRA() {
+	protected double drawCPRA() {
 		double CPRA = random.nextDouble();
 		return CPRA;
 
@@ -180,6 +185,18 @@ public class PatientsForDeceasedDonorGenerator {
 		myHashMap.get(newPatient.getBloodTypePatient()).add(newPatient);
 
 		return newPatient;
+	}
+	
+	
+	/*
+	 * Adds a particular patient in the list
+	 */
+	public HashMap<BloodType, List<WaitlistedPatient>>  addThisPatient(WaitlistedPatient myPatient,
+			HashMap<BloodType, List<WaitlistedPatient>> myHashMap) {
+		System.out.printf("Patient with blood type "+myPatient.getBloodTypePatient()+ " will be added to the list");
+		myHashMap.get(myPatient.getBloodTypePatient()).add(myPatient);
+		System.out.printf("added");
+		return myHashMap;
 	}
 
 	/*
