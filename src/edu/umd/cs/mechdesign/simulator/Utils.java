@@ -78,8 +78,8 @@ public class Utils {
 			Vertex v = patientTransplant.getKey();
 			if (!(v instanceof VertexAltruist)) {
 
-				out.set(TCol.BLOOD_TYPE,
-						((VertexPair) patientTransplant.getKey()).getBloodTypeDonor());
+				out.set(TCol.BLOOD_TYPE, ((VertexPair) patientTransplant
+						.getKey()).getBloodTypeDonor());
 				out.set(TCol.TRANSPLANT_TIME, patientTransplant.getValue());
 
 				/* record tuple */
@@ -119,6 +119,7 @@ public class Utils {
 		for (Pair<Double, Vertex> altruist : altruistsByEntryTime) {
 			Vertex alt = altruist.getRight();
 			out.set(ACol.BLOOD_TYPE, ((VertexAltruist) alt).getBloodTypeDonor());
+			out.set(ACol.ILLNESS_TIME, altruist.getLeft());
 			out.set(ACol.AGE, patientAges.get(alt.toString()));
 
 			/* record tuple */
