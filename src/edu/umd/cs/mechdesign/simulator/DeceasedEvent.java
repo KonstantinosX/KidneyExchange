@@ -45,8 +45,8 @@ public class DeceasedEvent {
 	public static DeceasedEvent getNextDeceasedEvent(
 			Queue<Pair<Double, Vertex>> patientsByExitTime,
 			Queue<Pair<Double, Vertex>> patientsByEntryTime,
-			Queue<Pair<Double, WaitlistedPatient>> altruistsByEntryTime,
-			Queue<Pair<Double, WaitlistedPatient>> patientsByLeavingTime,
+			Queue<Pair<Double, Vertex>> altruistsByEntryTime,
+			Queue<Pair<Double, Vertex>> patientsByLeavingTime,
 			Queue<Double> organEvents) {
 
 		// TODO stub for baseline simulation

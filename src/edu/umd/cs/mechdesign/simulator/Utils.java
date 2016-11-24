@@ -3,6 +3,7 @@ package edu.umd.cs.mechdesign.simulator;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -22,6 +23,7 @@ import edu.cmu.cs.dickerson.kpd.structure.Vertex;
 import edu.cmu.cs.dickerson.kpd.structure.VertexAltruist;
 import edu.cmu.cs.dickerson.kpd.structure.VertexPair;
 import edu.cmu.cs.dickerson.kpd.structure.types.BloodType;
+import edu.umd.cs.mechdesign.simulator.DeceasedSimulationOutput.PCol;
 
 public class Utils {
 
@@ -137,6 +139,50 @@ public class Utils {
 		}
 	}
 	
+
+	public static void printPatientInformation(String path, ArrayList <PatientInformationHolder> allinfo){
+		
+		DeceasedSimulationOutput out;
+		try {
+			out = new DeceasedSimulationOutput(path);
+		} catch (IOException e) {
+			e.printStackTrace();
+			return;
+		}
+		for(int i=0; i<allinfo.size();i++){
+			out.set(PCol.ID, allinfo.get(i).getPatient().getID());
+			out.set(PCol.ILLNESS_TIME, allinfo.get(i).getPatient().getEntryTime());
+			out.set(PCol.AGE_ILLNESS, allinfo.get(i).getPatient().getAge());
+			out.set(PCol.BLOOD_TYPE, allinfo.get(i).getPatient().getBloodTypePatient());
+			out.set(PCol.CPRA, allinfo.get(i).getPatient().getCPRA());
+			out.set(PCol.IS_ALTRUIST, allinfo.get(i).getPatient().isIsAnAltruist());
+			out.set(PCol.EXIT_TIME, allinfo.get(i).getCurrTime());
+			out.set(PCol.WAITING_TIME, (allinfo.get(i).getCurrTime()-allinfo.get(i).getPatient().getEntryTime()));
+			out.set(PCol.EXIT_REASON, allinfo.get(i).getExit_reason());
+			if(allinfo.get(i).getOrgan()==null){
+				out.set(PCol.ORGAN_BLOOD_TYPE, "");
+				out.set(PCol.ORGAN_DPI, "");
+			}
+			else{
+				out.set(PCol.ORGAN_BLOOD_TYPE, allinfo.get(i).getOrgan().getBloodTypeDonor());
+				out.set(PCol.ORGAN_DPI, allinfo.get(i).getOrgan().getDPI());
+			}
+			
+			
+
+			
+			/* record tuple */
+			try {
+				out.record();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		
+		}
+
+	}
+	
+	
 	
 	public static double calculateTimeOfEntry(double Age, double CurrTime){
 		Random random = new Random();
@@ -153,151 +199,78 @@ public class Utils {
 		
 		
 		double AgeOfEntry = 0;
-		// assume that can only get sick in next age period
-		if(Age <=1 ){
+		// assume that only adults (>=18) can be altruistic donors
+		// estimate the conditional probability of getting sick in each age range, given your age 
+		if (Age <=34 ){
+			double probInThisRange = (34 - Age) * Pr_PATIENT_18_34 / (34 - 18);
 			double r = random.nextDouble();
-			if (r <= (Pr_PATIENT_1_5/(Pr_PATIENT_1_5 + Pr_PATIENT_6_10 + Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
+			if (r <= (probInThisRange/(probInThisRange + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
 				double r1 = random.nextDouble();
-				AgeOfEntry = 1 + 4 * r1;
+				AgeOfEntry = Age + (34 - Age) * r1;
 			}
-			else if (r <= (Pr_PATIENT_6_10/(Pr_PATIENT_1_5 + Pr_PATIENT_6_10 + Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
-				double r1 = random.nextDouble();
-				AgeOfEntry = 5 + 5 * r1;
-			}
-			else if (r <= (Pr_PATIENT_11_17/(Pr_PATIENT_1_5 + Pr_PATIENT_6_10 + Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
-				double r1 = random.nextDouble();
-				AgeOfEntry = 10 + 7 * r1;
-			}
-			else if (r <= (Pr_PATIENT_18_34/(Pr_PATIENT_1_5 + Pr_PATIENT_6_10 + Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
-				double r1 = random.nextDouble();
-				AgeOfEntry = 17 + 17 * r1;
-			}
-			else if (r <= (Pr_PATIENT_35_49/(Pr_PATIENT_1_5 + Pr_PATIENT_6_10 + Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
+			else if (r <= (probInThisRange + Pr_PATIENT_35_49/(probInThisRange + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
 				double r1 = random.nextDouble();
 				AgeOfEntry = 34 + 15 * r1;
 			}
-			else if (r <= (Pr_PATIENT_50_64/(Pr_PATIENT_1_5 + Pr_PATIENT_6_10 + Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
+			else if (r <= ((probInThisRange + Pr_PATIENT_35_49 + Pr_PATIENT_50_64)/(probInThisRange + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
 				double r1 = random.nextDouble();
 				AgeOfEntry = 49 + 15 * r1;
 			}
-			else if (r <= (Pr_PATIENT_65/(Pr_PATIENT_1_5 + Pr_PATIENT_6_10 + Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
-				double r1 = random.nextDouble();
-				AgeOfEntry = 65 + 15 * r1;
-			}
-
-			
-		}
-		else if (Age <=5 ){
-			double r = random.nextDouble();
-			if (r <= (Pr_PATIENT_6_10/( Pr_PATIENT_6_10 + Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
-				double r1 = random.nextDouble();
-				AgeOfEntry = 5 + 5 * r1;
-			}
-			else if (r <= ((Pr_PATIENT_6_10 + Pr_PATIENT_11_17)/(Pr_PATIENT_6_10 + Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
-				double r1 = random.nextDouble();
-				AgeOfEntry = 10 + 7 * r1;
-			}
-			else if (r <= ((Pr_PATIENT_6_10 + Pr_PATIENT_11_17 + Pr_PATIENT_18_34)/(Pr_PATIENT_6_10 + Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
-				double r1 = random.nextDouble();
-				AgeOfEntry = 17 + 17 * r1;
-			}
-			else if (r <= ((Pr_PATIENT_6_10 + Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49)/( Pr_PATIENT_6_10 + Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
-				double r1 = random.nextDouble();
-				AgeOfEntry = 34 + 15 * r1;
-			}
-			else if (r <= ((Pr_PATIENT_6_10 + Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64)/(Pr_PATIENT_6_10 + Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
-				double r1 = random.nextDouble();
-				AgeOfEntry = 49 + 15 * r1;
-			}
-			else if (r <= ((Pr_PATIENT_6_10 + Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65)/(Pr_PATIENT_6_10 + Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
-				double r1 = random.nextDouble();
-				AgeOfEntry = 65 + 15 * r1;
-			}
-		}
-		else if (Age <=10 ){
-			double r = random.nextDouble();
-			if (r <= (Pr_PATIENT_11_17/(Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
-				double r1 = random.nextDouble();
-				AgeOfEntry = 10 + 7 * r1;
-			}
-			else if (r <= ((Pr_PATIENT_11_17 + Pr_PATIENT_18_34)/(Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
-				double r1 = random.nextDouble();
-				AgeOfEntry = 17 + 17 * r1;
-			}
-			else if (r <= ((Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49)/( Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
-				double r1 = random.nextDouble();
-				AgeOfEntry = 34 + 15 * r1;
-			}
-			else if (r <= ((Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64)/(Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
-				double r1 = random.nextDouble();
-				AgeOfEntry = 49 + 15 * r1;
-			}
-			else if (r <= ((Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65)/(Pr_PATIENT_11_17 + Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
-				double r1 = random.nextDouble();
-				AgeOfEntry = 65 + 15 * r1;
-			}
-		}
-		else if (Age <=17 ){
-			double r = random.nextDouble();
-			if (r <= (Pr_PATIENT_18_34/(Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
-				double r1 = random.nextDouble();
-				AgeOfEntry = 17 + 17 * r1;
-			}
-			else if (r <= ((Pr_PATIENT_18_34 + Pr_PATIENT_35_49)/(Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
-				double r1 = random.nextDouble();
-				AgeOfEntry = 34 + 15 * r1;
-			}
-			else if (r <= ((Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64)/(Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
-				double r1 = random.nextDouble();
-				AgeOfEntry = 49 + 15 * r1;
-			}
-			else if (r <= ((Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65)/(Pr_PATIENT_18_34 + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
-				double r1 = random.nextDouble();
-				AgeOfEntry = 65 + 15 * r1;
-			}
-		}
-		else if (Age <=34 ){
-			double r = random.nextDouble();
-			if (r <= (Pr_PATIENT_35_49/(Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
-				double r1 = random.nextDouble();
-				AgeOfEntry = 34 + 15 * r1;
-			}
-			else if (r <= ((Pr_PATIENT_35_49 + Pr_PATIENT_50_64)/(Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
-				double r1 = random.nextDouble();
-				AgeOfEntry = 49 + 15 * r1;
-			}
-			else if (r <= ((Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65)/(Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
+			else if (r <= ((probInThisRange + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65)/(probInThisRange + Pr_PATIENT_35_49 + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
 				double r1 = random.nextDouble();
 				AgeOfEntry = 65 + 15 * r1;
 			}
 		}
 		else if (Age <=49 ){
+			double probInThisRange = (49 - Age) * Pr_PATIENT_35_49 / (49 - 35);
 			double r = random.nextDouble();
-			if (r <= ((Pr_PATIENT_50_64)/(Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
+			if (r <= ((probInThisRange)/(probInThisRange + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
+				double r1 = random.nextDouble();
+				AgeOfEntry = Age + (49 - Age) * r1;
+			}
+			else if (r <= ((probInThisRange + Pr_PATIENT_50_64)/(probInThisRange + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
 				double r1 = random.nextDouble();
 				AgeOfEntry = 49 + 15 * r1;
 			}
-			else if (r <= ((Pr_PATIENT_50_64 + Pr_PATIENT_65)/( Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
+			else if (r <= ((probInThisRange + Pr_PATIENT_50_64 + Pr_PATIENT_65)/( probInThisRange + Pr_PATIENT_50_64 + Pr_PATIENT_65))   ) {
 				double r1 = random.nextDouble();
 				AgeOfEntry = 65 + 15 * r1;
 			}
 		}
 		else if (Age <=64 ){
-			double r1 = random.nextDouble();
-			AgeOfEntry = 65 + 15 * r1;
+			double probInThisRange = (64 - Age) * Pr_PATIENT_50_64 / (64 - 50);
+			double r = random.nextDouble();
+			if (r <= ((probInThisRange)/(probInThisRange + Pr_PATIENT_65))   ) {
+				double r1 = random.nextDouble();
+				AgeOfEntry = Age + (64 - Age) * r1;
+			}
+			else if (r <= ((probInThisRange + Pr_PATIENT_65)/(probInThisRange + Pr_PATIENT_65))   ) {
+				double r1 = random.nextDouble();
+				AgeOfEntry = 65 + 15 * r1;
+			}
 		}
-		double timeOfEntry = CurrTime + AgeOfEntry - Age;
+		else{ // the altruist is older that 64
+			if(Age<85){
+				double r1 = random.nextDouble();
+				AgeOfEntry = Age + (85 - Age) * r1;
+			}
+			else{
+				double r1 = random.nextDouble();
+				AgeOfEntry = Age + r1;
+			}
+		}
+		
+		double timeOfEntry = CurrTime + (AgeOfEntry - Age)*52;
 		
 		return timeOfEntry;
 	}
 	
 	
-	public static Queue<Pair<Double, WaitlistedPatient>> readAltruists(double timeLimit, double deceasedSimulationZeroTime, PatientsForDeceasedDonorGenerator DKGen){
+	public static Queue<Pair<Double, Vertex>> readAltruists(double timeLimit, double deceasedSimulationZeroTime, PatientsForDeceasedDonorGenerator DKGen){
 		
 		// create queue than includes entry time and altruists
-		Queue<Pair<Double, WaitlistedPatient>> altruistsByEntryTime = new PriorityQueue<Pair<Double, WaitlistedPatient>>(
-				(int) timeLimit, new PatientTimeComparator());
-		
+		Queue<Pair<Double, Vertex>> altruistsByEntryTime = new PriorityQueue<Pair<Double, Vertex>>(
+				(int) timeLimit, new VertexTimeComparator());
 		
 		String csvFile = "././altruists.csv";
         String line = "";
@@ -314,10 +287,10 @@ public class Utils {
                 
                 if(myline==1){
                 	livingSimulationZeroTime = Double.parseDouble(info[3]);
-                	System.out.println("Simulation Time: "+info[3]);
+                	//System.out.println("Simulation Time: "+info[3]);
                 }
                 else{
-                	System.out.println("Age " + info[0] + " , Blood Type " + info[1]);
+                	//System.out.println("Age " + info[0] + " , Blood Type " + info[1]);
                 	// create a new patient for each altruistic
                 	BloodType bloodTypePatient = null;
                 	if(info[1].equals("O")){
@@ -334,18 +307,20 @@ public class Utils {
                 	}
                 	entryTimeInLivingSimulation = Double.parseDouble(info[2]);
                 	
+                	
                 	double TimeOfTransplantInDeceased = deceasedSimulationZeroTime + (entryTimeInLivingSimulation-livingSimulationZeroTime);
                 	
                 	double EntryTime = calculateTimeOfEntry(Double.parseDouble(info[0]), TimeOfTransplantInDeceased);
                 	
                 	double ageWhenEntersWaitingList = Double.parseDouble(info[0]) + (EntryTime - TimeOfTransplantInDeceased);
                 	// age defined as the age that the patient will have when he enters the waiting list
+                	// the boolean IsAnAltruist takes the value "true"
                 	WaitlistedPatient w = new WaitlistedPatient(DKGen.getNewID(), DKGen.drawCPRA(),ageWhenEntersWaitingList,bloodTypePatient, true);
                 	
-                	System.out.println("\n Time that altruist will arrive " + EntryTime + " \n");
+                	//System.out.println("\n Time that altruist will arrive " + EntryTime + " \n");
                 	
                 	
-                	altruistsByEntryTime.add(new Pair<Double, WaitlistedPatient>(EntryTime, w));
+                	altruistsByEntryTime.add(new Pair<Double, Vertex>(EntryTime, w));
                 }
                 myline++;
 
@@ -354,20 +329,18 @@ public class Utils {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        
-        
-        System.out.printf("The fist altruist blood type: "+altruistsByEntryTime.peek().getRight().getBloodTypePatient());
+
         return altruistsByEntryTime;
 	}
 	
 	
 	
 	// read the csv file and return a list of patient objects
-public static Queue<Pair<Double, WaitlistedPatient>> readPatientGivenLDK(double timeLimit, double deceasedSimulationZeroTime, PatientsForDeceasedDonorGenerator DKGen){
+	public static Queue<Pair<Double, Vertex>> readPatientGivenLDK(double timeLimit, double deceasedSimulationZeroTime, PatientsForDeceasedDonorGenerator DKGen){
 		
 		// create queue than includes entry time and altruists
-		Queue<Pair<Double, WaitlistedPatient>> patientsByLeavingTime = new PriorityQueue<Pair<Double, WaitlistedPatient>>(
-				(int) timeLimit, new PatientTimeComparator());
+		Queue<Pair<Double, Vertex>> patientsByLeavingTime = new PriorityQueue<Pair<Double, Vertex>>(
+				(int) timeLimit, new VertexTimeComparator());
 		
 		
 		String csvFile = "././transplants.csv";
@@ -384,10 +357,10 @@ public static Queue<Pair<Double, WaitlistedPatient>> readPatientGivenLDK(double 
                 
                 if(myline==1){
                 	livingSimulationZeroTime = Double.parseDouble(info[2]);
-                	System.out.println("Simulation Time: "+info[2]);
+                	//System.out.println("Simulation Time: "+info[2]);
                 }
                 else{
-                	System.out.println("Tranplant time " + info[0] + " , Blood Type " + info[1]);
+                	//System.out.println("Tranplant time " + info[0] + " , Blood Type " + info[1]);
                 	// create a new patient for each altruistic
                 	BloodType bloodTypePatient = null;
                 	if(info[1].equals("O")){
@@ -407,10 +380,10 @@ public static Queue<Pair<Double, WaitlistedPatient>> readPatientGivenLDK(double 
                 	
                 	double patientTransplantTimeInLiving = Double.parseDouble(info[0]);
                 	double patientLeavesDeceasedSimulationTime = deceasedSimulationZeroTime + (patientTransplantTimeInLiving - livingSimulationZeroTime);
-                	System.out.println("\n Time that he leaves the simulation " + patientLeavesDeceasedSimulationTime + " \n");
+                	//System.out.println("\n Time that he leaves the simulation " + patientLeavesDeceasedSimulationTime + " \n");
                 	
                 	
-                	patientsByLeavingTime.add(new Pair<Double, WaitlistedPatient>(patientLeavesDeceasedSimulationTime, w));
+                	patientsByLeavingTime.add(new Pair<Double, Vertex>(patientLeavesDeceasedSimulationTime, w));
                 }
                 myline++;
 

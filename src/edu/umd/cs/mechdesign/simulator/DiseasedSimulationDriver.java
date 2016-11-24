@@ -1,17 +1,13 @@
 package edu.umd.cs.mechdesign.simulator;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Random;
-import java.util.Set;
 import java.util.logging.Logger;
 
 import edu.cmu.cs.dickerson.kpd.dynamic.arrivals.ExponentialArrivalDistribution;
@@ -34,32 +30,31 @@ public class DiseasedSimulationDriver {
 		
 		int total_organs=0;
 		int total_new_patients=0;
-		int total_exit_times_of_initial=0;
-		int total_entry_times_of_initial=0;
 		// time unit: week (52 weeks in year)
 		
 		// parameters for exponential
 		//https://optn.transplant.hrsa.gov/data/view-data-reports/national-data/#
-		//35,039 additions per year (2015), so 35039/52 per week
-		double new_patient_additions_per_week = 673.8269231;
+		//35,039 additions per year (2015), so 35039/52 per week = 673.8269231
+		// but decrease the scale of the parameters by /50 ------> 13.47653846 per week
+		double new_patient_additions_per_week = 13;
 
 		
 		//http://www.uptodate.com/contents/patient-survival-and-maintenance-dialysis
 		// 8*52 years survival in dialysis (1/8*52)
 		// 4.5*52 for 60+  (2/9*52)
-		
 		double lambda_young = 0.002403846;
-		
 		double lambda_old = 0.004273504;
+		
 		
 		//https://optn.transplant.hrsa.gov/data/view-data-reports/national-data/#
 		// in 2015: 8,250	deceased donors kidneys (8250/52)
-		// in 2015: 12,250 transplant by donor ????
-		double new_organ_per_week = 158.6538462;
+		// but decrease the scale of the parameters by /50 ------> 3.173076924 per week
+		double new_organ_per_week = 3.173076924;
 		
 
+		//in weeks
+		double lifeExpectancy = 78*52; 
 		
-		double lifeExpectancy = 78*52; //in weeks
 		
 		Random r = new Random();
 		
@@ -68,6 +63,7 @@ public class DiseasedSimulationDriver {
 		lifespanTimeGen_young = new ExponentialArrivalDistribution(lambda_young, r);
 		lifespanTimeGen_old = new ExponentialArrivalDistribution(lambda_old, r);
 		organArrivalTimeGen = new ExponentialArrivalDistribution(new_organ_per_week, r);
+		
 		
 		// probability that a patient will reject an organ and max number of patients asked
 		// TODO different rejection based on characteristics of organ/patient
@@ -78,22 +74,25 @@ public class DiseasedSimulationDriver {
 		PatientsForDeceasedDonorGenerator DKGen = new PatientsForDeceasedDonorGenerator(r);
 		OrganGenerator OGen = new OrganGenerator(r);
 		
+		
+		// https://optn.transplant.hrsa.gov/data/view-data-reports/national-data/#
+		// current waiting list:99,327
+		// but decrease the scale of the parameters by /50 ------> 1986
+		int numPatients = 1986;
+		
 		// create initial Waiting List
-		//https://optn.transplant.hrsa.gov/data/view-data-reports/national-data/#
-		//current waiting list:99,327
-		int numPatients = 99327;
-		//int numPatients = 993;
 		HashMap<BloodType, List<WaitlistedPatient>> DKWaitingList = DKGen.generateHashMap(numPatients);
 		
 		
+		// create list that will contain information for all patients departing the simulation
+		ArrayList <PatientInformationHolder> allinfo = new ArrayList <PatientInformationHolder>();
+		
 		// **************** SIMULATION ****************
-		//divide by 50
 		double currTime = 0.0;
 		DeceasedEvent currDeceasedEvent = null;
 		double lastExitTime = -1;
 		//run time in weeks
-		double timeLimit = 520; //10 years
-		//double timeLimit = 200; //10 years
+		double timeLimit = 5200; //100 years
 		double deceasedSimulationZeroTime;
 		
 		
@@ -121,16 +120,16 @@ public class DiseasedSimulationDriver {
 		 * A priority queue that keeps the times that the object vertex (altruist) will enter the waiting list
 		 * 
 		 */
-		Queue<Pair<Double, WaitlistedPatient>> altruistsByEntryTime = new PriorityQueue<Pair<Double, WaitlistedPatient>>(
-				(int) timeLimit, new PatientTimeComparator());
+		Queue<Pair<Double, Vertex>> altruistsByEntryTime = new PriorityQueue<Pair<Double, Vertex>>(
+				(int) timeLimit, new VertexTimeComparator());
 		
 		/*
 		 * A priority queue that keeps the times that the object vertex (altruist) will leave the waiting list
 		 * because they received a kidney from a living donor (pseudo-patients)
 		 * 
 		 */
-		Queue<Pair<Double, WaitlistedPatient>> patientsByLeavingTime = new PriorityQueue<Pair<Double, WaitlistedPatient>>(
-				(int) timeLimit, new PatientTimeComparator());
+		Queue<Pair<Double, Vertex>> patientsByLeavingTime = new PriorityQueue<Pair<Double, Vertex>>(
+				(int) timeLimit, new VertexTimeComparator());
 		
 		
 		
@@ -189,8 +188,6 @@ public class DiseasedSimulationDriver {
 			patientsByEntryTime.add(new Pair<Double, Vertex>(entryTime, w));
 		}
 		deceasedSimulationZeroTime = currTime;
-		total_exit_times_of_initial=patientsByExitTime.size();
-		total_entry_times_of_initial=patientsByEntryTime.size();
 		
 		
 		// schedule arrival of altruistic donors
@@ -198,24 +195,14 @@ public class DiseasedSimulationDriver {
 		altruistsByEntryTime = Utils.readAltruists(timeLimit, deceasedSimulationZeroTime, DKGen);
 		System.out.print("Time that first altruist gets sick "+altruistsByEntryTime.peek().getLeft()+"\n");
 		
-		try {
-			Thread.sleep(5000);
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+
 		
 		// schedule departure of patients getting a living donor kidney
 		
 		patientsByLeavingTime = Utils.readPatientGivenLDK( timeLimit,  deceasedSimulationZeroTime,  DKGen);
 		System.out.print("Time that first patient gets LDK "+patientsByLeavingTime.peek().getLeft()+"\n");
 		
-		try {
-			Thread.sleep(5000);
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+
 
 
 		// schedule arrival of organs 
@@ -321,10 +308,14 @@ public class DiseasedSimulationDriver {
 				// patient is still in the waiting list
 				if(DKGen.IsInWaitingList(DKWaitingList,toRemove.getID())){
 					System.out.println("Patient ID "+toRemove.getID()+" has died");
+					
+					// keep information
+					PatientInformationHolder newInfo = new PatientInformationHolder(currTime  ,(WaitlistedPatient)toRemove, null, "died");
+					allinfo.add(newInfo);
+					
+					
 					DKWaitingList = DKGen.removePatient(DKWaitingList,toRemove.getID());
 				
-					//TODO input patient information in file (blood type, waiting time, etc) and that he died
-
 				}
 				else{
 					System.out.println("The patient we are trying to kill was given a kindey \n");
@@ -338,13 +329,9 @@ public class DiseasedSimulationDriver {
 				// a patient with this blood type will randomly be selected to leave the queue
 				// in this is an altruistic donor, another patient will be removed
 				
-				WaitlistedPatient toRemove = patientsByLeavingTime.poll().getRight();
+				WaitlistedPatient toRemove = (WaitlistedPatient)patientsByLeavingTime.poll().getRight();
 				boolean flag = true;
 				
-				System.out.println("The size of the waiting list: "+(DKWaitingList.get(BloodType.AB).size()
-						+DKWaitingList.get(BloodType.A).size()
-						+DKWaitingList.get(BloodType.B).size()
-						+DKWaitingList.get(BloodType.O).size()));
 				
 				while(flag){
 					double IndexToRemoveDouble = r.nextDouble()*DKWaitingList.get(toRemove.getBloodTypePatient()).size() ;
@@ -353,32 +340,27 @@ public class DiseasedSimulationDriver {
 					WaitlistedPatient w = DKWaitingList.get(toRemove.getBloodTypePatient()).get(IndexToRemove);
 					if(!w.isIsAnAltruist()){
 						System.out.println("Patient with ID " +DKWaitingList.get(toRemove.getBloodTypePatient()).get(IndexToRemove).getID()+ "got an organ from a living donor!");
+						
+						// keep information
+						PatientInformationHolder newInfo = new PatientInformationHolder(currTime  ,DKWaitingList.get(toRemove.getBloodTypePatient()).get(IndexToRemove), null, "receivedLDK");
+						allinfo.add(newInfo);
+						
+						
 						DKWaitingList.get(toRemove.getBloodTypePatient()).remove(IndexToRemove);
 						flag = false;
 					}
 				}
-				
-				
-
-				try {
-					Thread.sleep(5000);
-				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}		
-				System.out.println("The size of the waiting list should decrease by 1: "+(DKWaitingList.get(BloodType.AB).size()
-						+DKWaitingList.get(BloodType.A).size()
-						+DKWaitingList.get(BloodType.B).size()
-						+DKWaitingList.get(BloodType.O).size()));		
+					
 			}
 			
-			// the altruist got sick
 			
+			// the altruist got sick, so he will be added to the waiting list
 			if (currDeceasedEvent.getType().equals(DeceasedEventType.ALTRUIST_GETS_SICK)) {
 				
 				// put patient in waiting list
-				WaitlistedPatient newAltruist = altruistsByEntryTime.poll().getRight();
+				WaitlistedPatient newAltruist = (WaitlistedPatient)altruistsByEntryTime.poll().getRight();
 				newAltruist.setEntryTime(currTime);
+
 				DKWaitingList = DKGen.addThisPatient(newAltruist,DKWaitingList);
 				
 				// generate life span based on age
@@ -389,22 +371,17 @@ public class DiseasedSimulationDriver {
 				else{
 					exitTime = currTime + lifespanTimeGen_old.draw();
 				}
-				
-				
-				patientsByExitTime.add(new Pair<Double, Vertex>(exitTime, newAltruist));
 
-				System.out.println("New Altruist has arrived, whith ID "+newAltruist + " ,and with exit time :" + exitTime);
-				try {
-					Thread.sleep(5000);
-				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
+				// add the exit time of the patient to the queue
+	
+				patientsByExitTime.add(new Pair<Double, Vertex>(exitTime, newAltruist));
+				
+				System.out.println("New Altruist has arrived, whith ID "+newAltruist + " ,and with exit time: " + exitTime);
+				
 			}
 			
 			
 			// a new patient arrives
-			
 			if (currDeceasedEvent.getType().equals(DeceasedEventType.PATIENT_ENTERS)) {
 
 				// add 1 patient to waiting list
@@ -421,10 +398,9 @@ public class DiseasedSimulationDriver {
 					exitTime = currTime + lifespanTimeGen_old.draw();
 				}
 				
-				
 				patientsByExitTime.add(new Pair<Double, Vertex>(exitTime, newPatient));
 
-				System.out.println("New Patient has arrived, whith ID "+newPatient + " ,and with exit time :" + exitTime);
+				System.out.println("New Patient has arrived, with ID "+newPatient + " ,and with exit time :" + exitTime);
 				
 			}
 			
@@ -600,10 +576,14 @@ public class DiseasedSimulationDriver {
 						if(Math.random()>=organ_rejection_prob){
 							//the patient accepts the organ
 							System.out.println("Patient ID "+ListPrioritized.get(i).getRight().getID()+" was given a kidney");
+							
+							// keep information
+							PatientInformationHolder newInfo = new PatientInformationHolder(currTime  ,(WaitlistedPatient)ListPrioritized.get(i).getRight(), newOrgan, "receivedDDK");
+							allinfo.add(newInfo);
+							
 							// remove from Waiting list
 							DKWaitingList = DKGen.removePatient(DKWaitingList,ListPrioritized.get(i).getRight().getID());
 							
-							//TODO input patient information in file (blood type, waiting time, etc) and that he received the organ
 							break;
 						}
 						else{
@@ -632,73 +612,18 @@ public class DiseasedSimulationDriver {
 		System.out.print("Size of waiting list for B "+DKWaitingList.get(BloodType.B).size()+"\n");
 		System.out.print("Size of waiting list for AB "+DKWaitingList.get(BloodType.AB).size()+"\n");
 
-		
-		System.out.print("Total entry times of initial waiting list: "+total_entry_times_of_initial+"\n");
-		System.out.print("Total exit times of initial waiting list: "+total_exit_times_of_initial+"\n");
 		System.out.print("Total organs arrived: "+total_organs+"\n");
 		System.out.print("Total new patients arrived: "+total_new_patients+"\n");
 		
 	
 		
 		System.out.print("Done! :)");
-		//output after running for 10 years
-		//Size of waiting list for O 85841
-		//Size of waiting list for A 56904
-		//Size of waiting list for B 26005
-		//Size of waiting list for AB 6823
-		//Total entry times of initial waiting list: 99327
-		//Total exit times of initial waiting list: 99327
-		//Total organs arrived: 59461
-		//Total new patients arrived: 351099
-		
-		
+
 		lifespanTimeGen_young = new ExponentialArrivalDistribution(lambda_young, r);
 		lifespanTimeGen_old = new ExponentialArrivalDistribution(lambda_old, r);
 		
-		ArrayList<Double> X = new ArrayList<Double>();
-		for (int l=0;l<1000;l++){
-			double yyy = organArrivalTimeGen.draw();
-			X.add(yyy);
-		}
-		double sum=0;
-		for (int l=0;l<1000;l++){
-			sum = sum + X.get(l);
-		}
-		System.out.print("\n Average organ arrival: "+sum/1000);
-		
-		ArrayList<Double> X1 = new ArrayList<Double>();
-		for (int l=0;l<1000;l++){
-			double yyy = arrivalTimeGen.draw();
-			X1.add(yyy);
-		}
-		double sum1=0;
-		for (int l=0;l<1000;l++){
-			sum1 = sum1 + X1.get(l);
-		}
-		System.out.print("\n Average patient arrival: "+sum1/1000);
-		
-		ArrayList<Double> X2 = new ArrayList<Double>();
-		for (int l=0;l<1000;l++){
-			double yyy = lifespanTimeGen_young.draw();
-			X2.add(yyy);
-		}
-		double sum2=0;
-		for (int l=0;l<1000;l++){
-			sum2 = sum2 + X2.get(l);
-		}
-		System.out.print("\n Average lifespan for young: "+sum2/1000);
-		
-		
-		ArrayList<Double> X3 = new ArrayList<Double>();
-		for (int l=0;l<1000;l++){
-			double yyy = lifespanTimeGen_old.draw();
-			X3.add(yyy);
-		}
-		double sum3=0;
-		for (int l=0;l<1000;l++){
-			sum3 = sum3 + X3.get(l);
-		}
-		System.out.print("\n Average lifespan for old: "+sum3/1000);
+		//write information in CSV
+		Utils.printPatientInformation("././patientInfo.csv", allinfo);
 		
 		return;
 	}
@@ -710,11 +635,10 @@ public class DiseasedSimulationDriver {
 				+0.2*(currTime-patient.getEntryTime())
 				+0.04*patient.getCPRA();
 		if (patient.isIsAnAltruist()){
-			KAS = KAS + 10000;
+			KAS = KAS + 100000;
 		}
 		return KAS;
 	}
 
-	
 	
 }
