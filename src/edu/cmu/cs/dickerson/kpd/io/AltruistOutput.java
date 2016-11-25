@@ -7,7 +7,7 @@ public class AltruistOutput extends Output {
 	private static double timeZero;
 
 	public enum ACol implements OutputCol {
-		AGE, BLOOD_TYPE, ILLNESS_TIME, TIME_ZERO
+		AGE, BLOOD_TYPE, ENTRY_TIME, TIME_ZERO
 
 		;
 
@@ -25,7 +25,7 @@ public class AltruistOutput extends Output {
 
 		String[] header = new String[ACol.values().length];
 		header[ACol.AGE.getColIdx()] = "altruist_age";
-		header[ACol.ILLNESS_TIME.getColIdx()] = "illness_time";
+		header[ACol.ENTRY_TIME.getColIdx()] = "entry_time";
 		header[ACol.BLOOD_TYPE.getColIdx()] = "altruist_blood_type";
 		header[ACol.TIME_ZERO.getColIdx()] = Double.toString(timeZero);
 		return header;

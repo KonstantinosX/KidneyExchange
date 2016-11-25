@@ -19,9 +19,10 @@ import edu.cmu.cs.dickerson.kpd.helper.IOUtil;
 import edu.cmu.cs.dickerson.kpd.helper.Pair;
 import edu.cmu.cs.dickerson.kpd.helper.VertexTimeComparator;
 import edu.cmu.cs.dickerson.kpd.io.MatchingSimulationOutput;
-import edu.cmu.cs.dickerson.kpd.io.PatientTransplantOutput;
 import edu.cmu.cs.dickerson.kpd.io.MatchingSimulationOutput.Col;
 import edu.cmu.cs.dickerson.kpd.solver.CycleFormulationCPLEXSolver;
+import edu.cmu.cs.dickerson.kpd.solver.CycleFormulationLPRelaxCPLEXSolver;
+import edu.cmu.cs.dickerson.kpd.solver.approx.CyclesSampleChainsIPPacker;
 import edu.cmu.cs.dickerson.kpd.solver.exception.SolverException;
 import edu.cmu.cs.dickerson.kpd.solver.solution.Solution;
 import edu.cmu.cs.dickerson.kpd.structure.Cycle;
@@ -34,10 +35,21 @@ import edu.cmu.cs.dickerson.kpd.structure.alg.CycleMembership;
 import edu.cmu.cs.dickerson.kpd.structure.alg.FailureProbabilityUtil;
 import edu.cmu.cs.dickerson.kpd.structure.generator.SaidmanPoolGenerator;
 
+/**
+ * Discrete Event Simulation of Living Donor Kidney Exchange. Each time whole
+ * time unit in this simulation is one week.
+ * 
+ * @author kostasx
+ *
+ */
 public class SimulationDriver {
 	private static final Logger logger = Logger
 			.getLogger(SimulationDriver.class.getSimpleName());
 
+	/*
+	 * drawing from an exponential distribution gives you numbers whose average
+	 * is roughly 1/lambda
+	 */
 	private static ExponentialArrivalDistribution arrivalTimeGen;
 	private static ExponentialArrivalDistribution lifespanTimeGen;
 	private static ExponentialArrivalDistribution transplantTimeGen;
@@ -46,7 +58,28 @@ public class SimulationDriver {
 	private static ExponentialArrivalDistribution youngLifespanTimeGen;
 
 	public static void main(String[] args) {
-		double m = 3.5;
+
+		/* Basic Parameters */
+		int cycleCap = 3;
+		int chainCap = 4;
+
+		// normally: 300 pairs scaling down to -> 1/2
+		int graphSize = 150;
+		// = 300;
+
+		// 25- to 300
+		double timeLimit = 260;
+
+		/* statistics */
+		int numDeaths = 0;
+		int numTransplants = 0;
+		int numArrivals = 0;
+		int numMatchings = 0;
+		int numChains = 0;
+
+		// 5630 living donors per year
+		// normally 10-15 scaling down to 1/2 roughly
+		double patientArrivalLambda = 6;
 
 		// younger than 60
 		double lambda_young = 0.002403846;
@@ -54,8 +87,10 @@ public class SimulationDriver {
 		// younger than 60
 		double lambda_old = 0.004273504;
 
-		double arrivalLambda = 0.3;
-		double timeLimit = 20;
+		// altruist arrival lambda
+		// about 1% of the people that enter should be altruists initially 
+		// so if 100 people enter in a week, 1 is an altruist. 
+		double altArrivalLambda = 0.2;
 
 		String path = "sim_run.csv";
 
@@ -78,9 +113,6 @@ public class SimulationDriver {
 		// //1.5, 2.0,
 		// });
 
-		boolean doOptIPUB2 = true; // Do optimal IP solve on C(3,4) but using
-									// infinite chain extension on 4-chains
-
 		// Set up our random generators for pools (sample from UNOS data, sample
 		// from Saidman distribution)
 		Random r = new Random();
@@ -88,13 +120,16 @@ public class SimulationDriver {
 		PatientsForDeceasedDonorGenerator ageGen = new PatientsForDeceasedDonorGenerator(
 				r);
 
-		arrivalTimeGen = new ExponentialArrivalDistribution(m, r);
+		arrivalTimeGen = new ExponentialArrivalDistribution(
+				patientArrivalLambda, r);
 		oldLifespanTimeGen = new ExponentialArrivalDistribution(lambda_old, r);
 		youngLifespanTimeGen = new ExponentialArrivalDistribution(lambda_young,
 				r);
 
-		transplantTimeGen = new ExponentialArrivalDistribution(m, r);
-		altArrivalTimeGen = new ExponentialArrivalDistribution(arrivalLambda, r);
+		transplantTimeGen = new ExponentialArrivalDistribution(
+				patientArrivalLambda, r);
+		altArrivalTimeGen = new ExponentialArrivalDistribution(
+				altArrivalLambda, r);
 
 		double failure_param1 = 0.7; // e.g., constant failure rate of 70%
 
@@ -110,11 +145,6 @@ public class SimulationDriver {
 			failDist = FailureProbabilityUtil.ProbabilityDistribution.NONE;
 		}
 
-		// Cycle and chain limits
-		int cycleCap = 3;
-		int chainCap = 4;
-		int graphSize = 50;
-
 		/**
 		 * The time window in which we should schedule the newly matched
 		 * transplants
@@ -127,7 +157,8 @@ public class SimulationDriver {
 
 		// Generate pool (~5% altruists, UNOS might be different);
 		int numPairs = (int) Math.round(graphSize * 0.95);
-		int numAlts = graphSize - numPairs;
+		int numAlts = 0;
+		// graphSize - numPairs;
 
 		Pool pool = SaidmanGen.generate(numPairs, numAlts);
 
@@ -140,7 +171,7 @@ public class SimulationDriver {
 
 		conductAllRemainingTransplants(pool, cg, cycleCap, chainCap);
 
-		logger.info("Pool: " + pool);
+		logger.info("Pool After all possible transplants: " + pool);
 		logger.info("Altruists: " + pool.getAltruists());
 		// GreedyPackingSolver s = new GreedyPackingSolver(pool);
 
@@ -340,7 +371,7 @@ public class SimulationDriver {
 
 		// schedule the matchings
 		// set the interval for when to do the matchings (every interval days);
-		double interval = 5;
+		double interval = 10;
 		while (true) {
 
 			if (matchingsTime >= timeLimit) {
@@ -407,16 +438,16 @@ public class SimulationDriver {
 		 */
 		currTime = currEvent.getTime();
 
-		logger.info("First event is: " + currEvent);
+		// logger.info("First event is: " + currEvent);
 		// System.exit(0);
-		logger.info("The following events will be executed");
-		System.out.println("Matching Times: " + matchingTimes);
-		System.out.println("CycleTransplant Times: " + cycleTransplantTimes);
-		System.out.println("VerticesBy Exit Time: " + verticesByExitTime);
-		System.out.println("VerticesBy Entry Time: " + verticesByEntryTime);
+		// logger.info("The following events will be executed");
+		// System.out.println("Matching Times: " + matchingTimes);
+		// System.out.println("CycleTransplant Times: " + cycleTransplantTimes);
+		// System.out.println("VerticesBy Exit Time: " + verticesByExitTime);
+		// System.out.println("VerticesBy Entry Time: " + verticesByEntryTime);
 
-		System.out.println("Altruist Events " + altEvents);
-		logger.info("State of the Pool: " + pool);
+		// System.out.println("Altruist Events " + altEvents);
+		// logger.info("State of the Pool: " + pool);
 		// System.exit(0);
 
 		while (currTime < timeLimit) {
@@ -434,6 +465,7 @@ public class SimulationDriver {
 				 */
 				Vertex toRemove = verticesByExitTime.poll().getRight();
 				if (pool.removeVertex(toRemove)) {
+					numDeaths++;
 					logger.info("We lost a patient... RIP");
 				}
 
@@ -521,6 +553,7 @@ public class SimulationDriver {
 
 			// add new patient
 			if (currEvent.getType().equals(EventType.PATIENT_ENTERS)) {
+				numArrivals++;
 
 				int addPair = 1;
 				int addAltruist = 0;
@@ -555,10 +588,12 @@ public class SimulationDriver {
 				patientAges.put(toAdd.toString(), age);
 
 				System.out.println(toAdd + " exit time :" + exitTime);
+
 			}
 
 			// check if it's time to do matchings
 			if (currEvent.getType().equals(EventType.CONDUCT_MATCHINGS)) {
+
 				// run matching, update
 				logger.info("conducting matchings..");
 
@@ -577,9 +612,12 @@ public class SimulationDriver {
 				 * happen.
 				 */
 				for (Cycle c : s.getMatching()) {
+					numMatchings++;
 
 					if (Cycle.isAChain(c, pool)) {
 						logger.info("Got a CHAING! " + c);
+						numChains++;
+
 						/* chain */
 						List<Edge> chainEdges = c.getEdges();
 
@@ -620,6 +658,8 @@ public class SimulationDriver {
 				}
 
 				logger.info("State of pool: " + pool);
+				System.out.println("SCHEDULED TRANSPLANTS: "
+						+ cycleTransplantTimes);
 			}
 
 			if (currEvent.getType().equals(EventType.CONDUCT_TRANSPLANT)) {
@@ -637,12 +677,15 @@ public class SimulationDriver {
 				Cycle toTransplant = cycleTransplantTimes.poll().getRight();
 				for (Vertex v : Cycle
 						.getConstituentVertices(toTransplant, pool)) {
+					numTransplants++;
+
 					pool.removeVertex(v);
 					transplantTimes.put(v, currTime);
 				}
 			}
 
 			if (currEvent.getType().equals(EventType.ALTRUIST_ENTERS)) {
+				numAlts++;
 
 				int addPair = 0;
 				int addAltruist = 1;
@@ -658,10 +701,10 @@ public class SimulationDriver {
 				/* adding the altruist by entry time exit time */
 				altruistsByEntryTime.add(new Pair<Double, Vertex>(currTime,
 						toAdd));
-
+				/* remove from altruist entry events queue */
 				altEvents.poll();
 
-				patientAges.put(toAdd.toString(), ageGen.drawPatientAge());
+				patientAges.put(toAdd.toString(), Utils.drawAltruistAge());
 			}
 
 			currEvent = Event.getNextEvent(matchingTimes, cycleTransplantTimes,
@@ -672,14 +715,22 @@ public class SimulationDriver {
 
 		logger.info("DONE!");
 		logger.info("pool: " + pool);
-		System.out.println("exit tiems: " + patientsByExitTime);
-		System.out.println("entry tiems: " + patientsByEntryTime);
-		
-		System.out.println("STASRTING TIME : "+startingTime);
 
+		System.out.println("Deaths: " + numDeaths);
+		System.out.println("Num Arrivals: " + numArrivals);
+		System.out.println("Altruists Entered: " + numAlts);
+		System.out.println("Matchings found: " + numMatchings);
+		System.out.println("Transplants Done: " + numTransplants);
+		System.out.println("Num Chains found: " + numChains);
+
+		/*
+		 * serialize information about the transplants that occured in this
+		 * simulation
+		 */
 		Utils.serializeTransplants(transplantsPath, transplantTimes,
 				startingTime);
 
+		/* serialize information about the altruists that came in */
 		Utils.serializeAltruists(altruistsPath, patientAges,
 				altruistsByEntryTime, startingTime);
 
@@ -728,33 +779,58 @@ public class SimulationDriver {
 		logger.info("State of the Pool: " + pool);
 		boolean usingFailureProbabilities = false;
 		double failure_param1 = 0.7; // e.g., constant failure rate of 70%
-		try {
+		// This should happen after a constant interval
+		// List<Cycle> cyclesAndChains = cg.generateCyclesAndChains(cycleCap,
+		// chainCap, usingFailureProbabilities, false, failure_param1);
+		// CycleMembership membershipUB2 = new CycleMembership(pool,
+		// cyclesAndChains);
 
-			// This should happen after a constant interval
-			List<Cycle> cyclesUB2 = cg.generateCyclesAndChains(cycleCap,
-					chainCap, usingFailureProbabilities, false, failure_param1);
-			CycleMembership membershipUB2 = new CycleMembership(pool, cyclesUB2);
+		// Upper bound on number of chains sampled per altruist in some
+		// heuristics
+		int chainSamplesPerAltruist = 256;
 
-			// Get optimal match size for pool on C(3,some non-infinite
-			// chain cap + infinite extension)
-			CycleFormulationCPLEXSolver optIPUB2S = new CycleFormulationCPLEXSolver(
-					pool, cyclesUB2, membershipUB2);
-			Solution sol = optIPUB2S.solve();
+		int infiniteChainCap = Integer.MAX_VALUE - 2;
 
-			logger.info(sol.getMatching().toString());
-			IOUtil.dPrintln("'Optimal IP' (UB extension) Value: "
-					+ sol.getObjectiveValue());
-			// Try to GC
-			cyclesUB2 = null;
-			membershipUB2 = null;
-			System.gc();
+		/* Solve IP */
+		// Get optimal match size for pool on C(3,some non-infinite
+		// chain cap + infinite extension)
+		// CycleFormulationCPLEXSolver optIPUB2S = new
+		// CycleFormulationCPLEXSolver(
+		// pool, cyclesAndChains, membershipUB2);
+		// Solution sol = null;
+		// try {
+		// sol = optIPUB2S.solve();
+		// } catch (SolverException e) {
+		// // TODO Auto-generated catch block
+		// e.printStackTrace();
+		// }
 
-			return sol;
-		} catch (SolverException e) {
-			e.printStackTrace();
-			System.exit(-1);
-			return null;
-		}
+		/* LP Relaxation */
+		// CycleFormulationLPRelaxCPLEXSolver optIPUB2S = new
+		// CycleFormulationLPRelaxCPLEXSolver(
+		// pool, cyclesUB2, membershipUB2);
+		// Pair<Solution, Map<Integer, Double>> p = optIPUB2S.solve();
+		// Solution sol = p.getLeft();
+		// membershipUB2 = p.getRight();
+
+		/* Using Approximate Solvers */
+		List<Cycle> reducedCycles = cg.generateCyclesAndChains(cycleCap, 0,
+				usingFailureProbabilities);
+		CyclesSampleChainsIPPacker packer = new CyclesSampleChainsIPPacker(
+				pool, reducedCycles, chainSamplesPerAltruist, infiniteChainCap,
+				usingFailureProbabilities);
+
+		Solution sol = packer.pack();
+
+		logger.info(sol.getMatching().toString());
+		IOUtil.dPrintln("'Optimal IP' (UB extension) Value: "
+				+ sol.getObjectiveValue());
+		// Try to GC
+		// cyclesAndChains = null;
+		// membershipUB2 = null;
+		System.gc();
+
+		return sol;
 	}
 
 	/**
