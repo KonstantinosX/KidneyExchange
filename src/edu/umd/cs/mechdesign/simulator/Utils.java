@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -15,7 +16,7 @@ import edu.cmu.cs.dickerson.kpd.helper.Pair;
 import edu.cmu.cs.dickerson.kpd.helper.VertexTimeComparator;
 import edu.cmu.cs.dickerson.kpd.io.AltruistOutput;
 import edu.cmu.cs.dickerson.kpd.io.PatientListOutput;
-import edu.cmu.cs.dickerson.kpd.io.PatientListOutput.Col;
+import edu.cmu.cs.dickerson.kpd.io.PatientListOutput.LPCol;
 import edu.cmu.cs.dickerson.kpd.io.PatientTransplantOutput.TCol;
 import edu.cmu.cs.dickerson.kpd.io.AltruistOutput.ACol;
 import edu.cmu.cs.dickerson.kpd.io.PatientTransplantOutput;
@@ -26,16 +27,6 @@ import edu.cmu.cs.dickerson.kpd.structure.types.BloodType;
 import edu.umd.cs.mechdesign.simulator.DeceasedSimulationOutput.PCol;
 
 public class Utils {
-
-	/* Age Probabilities for altruistic donors */
-	protected static double Pr_PATIENT_0_1 = 0.0;
-	protected static double Pr_PATIENT_1_5 = 0.0;
-	protected static double Pr_PATIENT_6_10 = 0.0;
-	protected static double Pr_PATIENT_11_17 = 0.0;
-	protected static double Pr_PATIENT_18_34 = 0.26323268;
-	protected static double Pr_PATIENT_35_49 = 0.39484902;
-	protected static double Pr_PATIENT_50_64 = 0.30248668;
-	protected static double Pr_PATIENT_65 = 0.03943162;
 
 	/**
 	 * Draws a random patient's age. We assume that in each age range, each age
@@ -48,6 +39,16 @@ public class Utils {
 	 * @return Age
 	 */
 	protected static double drawAltruistAge() {
+		/* Age Probabilities for altruistic donors */
+		double Pr_PATIENT_0_1 = 0.0;
+		double Pr_PATIENT_1_5 = 0.0;
+		double Pr_PATIENT_6_10 = 0.0;
+		double Pr_PATIENT_11_17 = 0.0;
+		double Pr_PATIENT_18_34 = 0.26323268;
+		double Pr_PATIENT_35_49 = 0.39484902;
+		double Pr_PATIENT_50_64 = 0.30248668;
+		double Pr_PATIENT_65 = 0.03943162;
+
 		Random random = new Random();
 		double r = random.nextDouble();
 		double age;
@@ -99,12 +100,18 @@ public class Utils {
 	 * @param entryList
 	 *            The list of patients that enter the pool in the entirety of
 	 *            the simulation's runtime as well as each patient's entry time
+	 * @param patientsByEntryTime
 	 * @param exitTimes
 	 *            The set of all patients including each patient's exit time.
+	 * @param transplantTimes
 	 * @param path
+	 * @param timeLimit
 	 */
-	public static void serializePatients(List<Pair<Double, Vertex>> entryList,
-			Map<String, Double> exitTimes, String path) {
+	public static void serializePatients(
+			List<Pair<Double, Vertex>> patientsByEntryTime,
+			Map<String, Double> patientsByExitTime,
+			Map<String, Double> patientAges,
+			Map<Vertex, Double> transplantTimes, String path, double timeLimit) {
 		PatientListOutput out;
 		try {
 			out = new PatientListOutput(path);
@@ -112,20 +119,40 @@ public class Utils {
 			e.printStackTrace();
 			return;
 		}
-
-		for (Pair<Double, Vertex> p : entryList) {
+		for (Pair<Double, Vertex> e : patientsByEntryTime) {
 			/* set entry and exit times */
-			VertexPair patient = (VertexPair) p.getRight();
-			out.set(Col.VERTEX_ID, patient.toString());
-			out.set(Col.TIME_ENTERED, p.getLeft());
-			out.set(Col.TIME_LEAVING, exitTimes.get(patient.toString()));
-			out.set(Col.BLOOD_TYPE, patient.getBloodTypePatient());
+			VertexPair patient = (VertexPair) e.getRight();
+			double entryTime = e.getLeft();
+			double exitTime = patientsByExitTime.get(patient.toString());
+			double waitingTime = exitTime - entryTime;
+			String exitReason = "DEATH";
+			if (transplantTimes.containsKey(patient)) {
+				exitReason = "SUCCESSFULL_TRANSPLANT";
+				exitTime = transplantTimes.get(patient);
+			} else {
+				/*
+				 * skip and don't record this patient if we don't know what will
+				 * happen to them in the future and the simulation ended before
+				 * he was able to get a transplant and before his death time
+				 */
+				if (timeLimit < exitTime)
+					continue;
+			}
+
+			out.set(LPCol.VERTEX_ID, patient.toString());
+			out.set(LPCol.ENTRY_TIME, entryTime);
+			out.set(LPCol.BLOOD_TYPE, patient.getBloodTypePatient());
+			out.set(LPCol.DONOR_BLOOD_TYPE, patient.getBloodTypeDonor());
+			out.set(LPCol.EXIT_TIME, exitTime);
+			out.set(LPCol.AGE_ILLNESS, patientAges.get(patient.toString()));
+			out.set(LPCol.WAITING_TIME, waitingTime);
+			out.set(LPCol.EXIT_REASON, exitReason);
 
 			/* record tuple */
 			try {
 				out.record();
-			} catch (IOException e) {
-				e.printStackTrace();
+			} catch (IOException ex) {
+				ex.printStackTrace();
 			}
 		}
 
@@ -243,7 +270,6 @@ public class Utils {
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
-
 		}
 
 	}

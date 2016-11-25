@@ -68,7 +68,7 @@ public class SimulationDriver {
 		// = 300;
 
 		// 25- to 300
-		double timeLimit = 260;
+		double timeLimit = 50;
 
 		/* statistics */
 		int numDeaths = 0;
@@ -88,14 +88,15 @@ public class SimulationDriver {
 		double lambda_old = 0.004273504;
 
 		// altruist arrival lambda
-		// about 1% of the people that enter should be altruists initially 
-		// so if 100 people enter in a week, 1 is an altruist. 
+		// about 1% of the people that enter should be altruists initially
+		// so if 100 people enter in a week, 1 is an altruist.
 		double altArrivalLambda = 0.2;
 
 		String path = "sim_run.csv";
 
 		String transplantsPath = "transplants.csv";
 		String altruistsPath = "altruists.csv";
+		String patientsPath = "patients.csv";
 
 		// lambda = 5 or 6
 		// // List of m parameters (for every one time period, expect m vertices
@@ -733,6 +734,9 @@ public class SimulationDriver {
 		/* serialize information about the altruists that came in */
 		Utils.serializeAltruists(altruistsPath, patientAges,
 				altruistsByEntryTime, startingTime);
+
+		/* serialize detailed information about all patients */
+		Utils.serializePatients(patientsByEntryTime, patientsByExitTime, patientAges, transplantTimes, patientsPath,timeLimit);
 
 		// clean up CSV writer
 		if (null != out) {
