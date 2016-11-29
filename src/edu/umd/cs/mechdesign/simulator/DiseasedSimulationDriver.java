@@ -39,17 +39,17 @@ public class DiseasedSimulationDriver {
 		double new_patient_additions_per_week = 13;
 
 		
-		//http://www.uptodate.com/contents/patient-survival-and-maintenance-dialysis
-		// 8*52 years survival in dialysis (1/8*52)
-		// 4.5*52 for 60+  (2/9*52)
-		double lambda_young = 0.002403846;
-		double lambda_old = 0.004273504;
+		//https://www.kidney.org/atoz/content/dialysisinfo
+		// 11*52 years survival in dialysis (1/11*52)
+		// 6*52 for 60+  (1/6*52)
+		double lambda_young = 0.001748252;
+		double lambda_old = 0.003205128;
 		
 		
 		//https://optn.transplant.hrsa.gov/data/view-data-reports/national-data/#
 		// in 2015: 8,250	deceased donors kidneys (8250/52)
 		// but decrease the scale of the parameters by /50 ------> 3.173076924 per week
-		double new_organ_per_week = 3.173076924;
+		double new_organ_per_week = 5;
 		
 
 		//in weeks
@@ -192,8 +192,8 @@ public class DiseasedSimulationDriver {
 		
 		// schedule arrival of altruistic donors
 		
-		altruistsByEntryTime = Utils.readAltruists(timeLimit, deceasedSimulationZeroTime, DKGen);
-		System.out.print("Time that first altruist gets sick "+altruistsByEntryTime.peek().getLeft()+"\n");
+//		altruistsByEntryTime = Utils.readAltruists(timeLimit, deceasedSimulationZeroTime, DKGen);
+//		System.out.print("Time that first altruist gets sick "+altruistsByEntryTime.peek().getLeft()+"\n");
 		
 
 		
@@ -336,19 +336,24 @@ public class DiseasedSimulationDriver {
 				while(flag){
 					double IndexToRemoveDouble = r.nextDouble()*DKWaitingList.get(toRemove.getBloodTypePatient()).size() ;
 					int IndexToRemove = (int) IndexToRemoveDouble;
-					
-					WaitlistedPatient w = DKWaitingList.get(toRemove.getBloodTypePatient()).get(IndexToRemove);
-					if(!w.isIsAnAltruist()){
-						System.out.println("Patient with ID " +DKWaitingList.get(toRemove.getBloodTypePatient()).get(IndexToRemove).getID()+ "got an organ from a living donor!");
-						
-						// keep information
-						PatientInformationHolder newInfo = new PatientInformationHolder(currTime  ,DKWaitingList.get(toRemove.getBloodTypePatient()).get(IndexToRemove), null, "receivedLDK");
-						allinfo.add(newInfo);
-						
-						
-						DKWaitingList.get(toRemove.getBloodTypePatient()).remove(IndexToRemove);
+					if(!DKWaitingList.get(toRemove.getBloodTypePatient()).isEmpty()){
+						WaitlistedPatient w = DKWaitingList.get(toRemove.getBloodTypePatient()).get(IndexToRemove);
+						if(!w.isIsAnAltruist()){
+							System.out.println("Patient with ID " +DKWaitingList.get(toRemove.getBloodTypePatient()).get(IndexToRemove).getID()+ "got an organ from a living donor!");
+							
+							// keep information
+							PatientInformationHolder newInfo = new PatientInformationHolder(currTime  ,DKWaitingList.get(toRemove.getBloodTypePatient()).get(IndexToRemove), null, "receivedLDK");
+							allinfo.add(newInfo);
+							
+							
+							DKWaitingList.get(toRemove.getBloodTypePatient()).remove(IndexToRemove);
+							flag = false;
+						}
+					}
+					else{
 						flag = false;
 					}
+					
 				}
 					
 			}
