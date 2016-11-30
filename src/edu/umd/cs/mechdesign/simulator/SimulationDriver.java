@@ -57,6 +57,28 @@ public class SimulationDriver {
 	private static ExponentialArrivalDistribution youngLifespanTimeGen;
 
 	public static void main(String[] args) {
+		String transplantsPath = "transplants_";
+		String altruistsPath = "altruists_";
+		String patientsPath = "patients_";
+
+		// next name
+		int k = 0;
+		double altruistLimit = 0.1;
+		int timeLimit = 5200;
+
+		for (double i = 0.01; i < altruistLimit; i += 0.1) {
+			System.out.println("Running for altruist arrival lambda : "+altruistLimit);
+			livingDonorSim(timeLimit, i, transplantsPath + Integer.toString(k)
+					+ ".csv", altruistsPath + Integer.toString(k) + ".csv",
+					patientsPath + Integer.toString(k) + ".csv");
+			k++;
+		}
+
+	}
+
+	public static void livingDonorSim(double timeLimit,
+			double altArrivalLambda, String transplantsPath,
+			String altruistsPath, String patientsPath) {
 
 		/* Basic Parameters */
 		int cycleCap = 3;
@@ -67,7 +89,7 @@ public class SimulationDriver {
 		// = 300;
 
 		// 25- to 300
-		double timeLimit = 520;
+		// double timeLimit = 1040;
 
 		/* statistics */
 		int numDeaths = 0;
@@ -76,6 +98,7 @@ public class SimulationDriver {
 		int numMatchings = 0;
 		int numChains = 0;
 		int numChainTransplants = 0;
+		int numCycles = 0;
 
 		// 5630 living donors per year
 		// normally 10-15 scaling down to 1/2 roughly
@@ -93,16 +116,17 @@ public class SimulationDriver {
 		// altruist arrival lambda
 		// about 1% of the people that enter should be altruists initially
 		// so if 100 people enter in a week, 1 is an altruist.
-		double altArrivalLambda = patientArrivalLambda * 0.01;
+
+		// double altArrivalLambda = patientArrivalLambda * 0.01;
 
 		/* Conduct matchings once every interval weeks */
 		double matchingsInterval = 2;
 
 		String path = "sim_run.csv";
 
-		String transplantsPath = "transplants.csv";
-		String altruistsPath = "altruists.csv";
-		String patientsPath = "patients.csv";
+		// String transplantsPath = "transplants.csv";
+		// String altruistsPath = "altruists.csv";
+		// String patientsPath = "patients.csv";
 
 		// lambda = 5 or 6
 		// // List of m parameters (for every one time period, expect m vertices
@@ -486,7 +510,7 @@ public class SimulationDriver {
 				 * remove from schedule for transplant if they die before
 				 * getting the transplant
 				 */
-				if (scheduledForTransplant.remove(toRemove)) {
+				else if (scheduledForTransplant.remove(toRemove)) {
 					numDeaths++;
 					logger.info("We lost a patient... RIP " + toRemove);
 				}
@@ -512,163 +536,170 @@ public class SimulationDriver {
 					 * Becuase of the c.getEdges.size() > 1 check, this should
 					 * never happen...
 					 */
-					if (Cycle.isAChain(c, pool)) {
-						/*
-						 * reverse the edges so that we iterate over them in the
-						 * correct order
-						 * 
-						 * a chain is initialy 2 -> A, 3 -> 2, 4 -> 3, 5 -> 4,
-						 * A-> 5 (begins and ends with the altruist) where A is
-						 * the altruist.
-						 */
-						Collections.reverse(c.getEdges());
+					// if (Cycle.isAChain(c, pool)) {
+					// /*
+					// * reverse the edges so that we iterate over them in the
+					// * correct order
+					// *
+					// * a chain is initialy 2 -> A, 3 -> 2, 4 -> 3, 5 -> 4,
+					// * A-> 5 (begins and ends with the altruist) where A is
+					// * the altruist.
+					// */
+					// Collections.reverse(c.getEdges());
+					//
+					// if (Cycle.getConstituentVertices(c, pool).contains(
+					// toRemove)) {
+					// /*
+					// * add everyone except the dead patient back to the
+					// * pool
+					// */
+					// for (Vertex v : Cycle.getConstituentVertices(c,
+					// pool)) {
+					// System.out.println(c);
+					// System.out.println("toremove: " + toRemove);
+					// if (!v.equals(toRemove)) {
+					//
+					// // in a chain (which is a single A->Patient
+					// // transplant), only the altruist will go
+					// // back
+					//
+					// // if (v instanceof VertexAltruist) {
+					// pool.addAltruist((VertexAltruist) v);
+					// // } else {
+					// // pool.addPair((VertexPair) v);
+					// // }
+					//
+					// /*
+					// * remove them from the set of scheduled
+					// * because they're back in the pool
+					// */
+					// scheduledForTransplant.remove(v);
+					//
+					// }
+					// }
+					// }
+					//
+					// if (Cycle.getConstituentVertices(c, pool).contains(
+					// toRemove)
+					// && c.getEdges().size() > 1) {
+					// System.out.print("Breaking a chain! " + c
+					// + " for removing " + toRemove);
+					//
+					// /*
+					// * How do we handle chains? We probably need to
+					// * break the chain at the patient that we lost, and
+					// * do the transplant on the chain up until this
+					// * patient only
+					// */
+					// List<Edge> chainEdges = new ArrayList<>();
+					// List<Edge> endChainEdges = new ArrayList<>();
+					//
+					// Iterator<Edge> chainIter = c.getEdges().iterator();
+					// boolean firstChain = true;
+					//
+					// /*
+					// * Get the portion of the chain before the patient
+					// * that we're removing
+					// */
+					// while (chainIter.hasNext()) {
+					// Edge e = chainIter.next();
+					//
+					// if (e.getTargt().equals(toRemove.toString())) {
+					// firstChain = false;
+					// } else if (firstChain) {
+					// chainEdges.add(e);
+					// /* second portion of the broken chain */
+					// } else {
+					// endChainEdges.add(e);
+					// }
+					// }
+					//
+					// Cycle firstBrokenPortion = Cycle.makeCycle(
+					// chainEdges, c.getWeight());
+					//
+					// Cycle secondBrokenPortion = Cycle.makeCycle(
+					// endChainEdges, endChainEdges.size());
+					//
+					// System.out.println("Broken Chain: "
+					// + firstBrokenPortion);
+					//
+					// System.out.println("Second Chain: "
+					// + secondBrokenPortion);
+					//
+					// /* First part of the pool gets scheduled */
+					// if (!firstBrokenPortion.getEdges().isEmpty()) {
+					// newAddition = new Pair<>(cc.getLeft(),
+					// firstBrokenPortion);
+					// System.out.println("New addition: "
+					// + newAddition);
+					// }
+					//
+					// /*
+					// * Everyone in the second part of the chain gets put
+					// * back in the pool
+					// */
+					// for (Vertex v : Cycle.getConstituentVertices(
+					// secondBrokenPortion, pool)) {
+					// if (v instanceof VertexAltruist) {
+					// pool.addAltruist((VertexAltruist) v);
+					// } else {
+					// pool.addPair((VertexPair) v);
+					// }
+					//
+					// }
+					//
+					// System.exit(0);
+					// // try {
+					// // Thread.sleep(10000);
+					// // } catch (InterruptedException e) {
+					// // e.printStackTrace();
+					// // }
+					// }
+					//
+					// // reomve the old chain
+					// // it.remove();
+					//
+					// }
+					// else {
 
-						if (Cycle.getConstituentVertices(c, pool).contains(
-								toRemove)) {
-							/*
-							 * add everyone except the dead patient back to the
-							 * pool
-							 */
-							for (Vertex v : Cycle.getConstituentVertices(c,
-									pool)) {
-								System.out.println(c);
-								System.out.println("toremove: " + toRemove);
-								if (!v.equals(toRemove)) {
-
-									// in a chain (which is a single A->Patient
-									// transplant), only the altruist will go
-									// back
-
-									// if (v instanceof VertexAltruist) {
-									pool.addAltruist((VertexAltruist) v);
-									// } else {
-									// pool.addPair((VertexPair) v);
-									// }
-
-									/*
-									 * remove them from the set of scheduled
-									 * because they're back in the pool
-									 */
-									scheduledForTransplant.remove(v);
-
-								}
-							}
-						}
-
-						if (Cycle.getConstituentVertices(c, pool).contains(
-								toRemove)
-								&& c.getEdges().size() > 1) {
-							System.out.print("Breaking a chain! " + c
-									+ " for removing " + toRemove);
-
-							/*
-							 * How do we handle chains? We probably need to
-							 * break the chain at the patient that we lost, and
-							 * do the transplant on the chain up until this
-							 * patient only
-							 */
-							List<Edge> chainEdges = new ArrayList<>();
-							List<Edge> endChainEdges = new ArrayList<>();
-
-							Iterator<Edge> chainIter = c.getEdges().iterator();
-							boolean firstChain = true;
-
-							/*
-							 * Get the portion of the chain before the patient
-							 * that we're removing
-							 */
-							while (chainIter.hasNext()) {
-								Edge e = chainIter.next();
-
-								if (e.getTargt().equals(toRemove.toString())) {
-									firstChain = false;
-								} else if (firstChain) {
-									chainEdges.add(e);
-									/* second portion of the broken chain */
-								} else {
-									endChainEdges.add(e);
-								}
-							}
-
-							Cycle firstBrokenPortion = Cycle.makeCycle(
-									chainEdges, c.getWeight());
-
-							Cycle secondBrokenPortion = Cycle.makeCycle(
-									endChainEdges, endChainEdges.size());
-
-							System.out.println("Broken Chain: "
-									+ firstBrokenPortion);
-
-							System.out.println("Second Chain: "
-									+ secondBrokenPortion);
-
-							/* First part of the pool gets scheduled */
-							if (!firstBrokenPortion.getEdges().isEmpty()) {
-								newAddition = new Pair<>(cc.getLeft(),
-										firstBrokenPortion);
-								System.out.println("New addition: "
-										+ newAddition);
-							}
-
-							/*
-							 * Everyone in the second part of the chain gets put
-							 * back in the pool
-							 */
-							for (Vertex v : Cycle.getConstituentVertices(
-									secondBrokenPortion, pool)) {
-								if (v instanceof VertexAltruist) {
-									pool.addAltruist((VertexAltruist) v);
-								} else {
-									pool.addPair((VertexPair) v);
-								}
-
-							}
-
-							System.exit(0);
-							// try {
-							// Thread.sleep(10000);
-							// } catch (InterruptedException e) {
-							// e.printStackTrace();
-							// }
-						}
-
-						// reomve the old chain
-						// it.remove();
-
-					} else {
-
-						/*
-						 * the cycle breaks, so we need to remove it completely
-						 * from the queue of cycles
-						 */
-						if (Cycle.getConstituentVertices(c, pool).contains(
-								toRemove)) {
-							it.remove();
-						}
-
-						/*
-						 * add vertices from this broken cycle back into the
-						 * pool and remove them from the scheduled set
-						 */
-						for (Vertex v : Cycle.getConstituentVertices(c, pool)) {
-							// System.out.println("IS A CHAIN? "
-							// + Cycle.isAChain(c, pool));
-							// System.out.println(c);
-							// System.out.println(v + " is : " + v.getClass());
-							pool.addPair((VertexPair) v);
-							scheduledForTransplant.remove(v);
-						}
-
+					/*
+					 * the cycle breaks, so we need to remove it completely from
+					 * the queue of cycles
+					 */
+					if (Cycle.getConstituentVertices(c, pool)
+							.contains(toRemove)) {
+						it.remove();
 					}
 
+					/*
+					 * add vertices from this broken cycle back into the pool
+					 * and remove them from the scheduled set
+					 */
+					for (Vertex v : Cycle.getConstituentVertices(c, pool)) {
+						// System.out.println("IS A CHAIN? "
+						// + Cycle.isAChain(c, pool));
+						// System.out.println(c);
+						// System.out.println(v + " is : " + v.getClass());
+						if (v instanceof VertexAltruist) {
+							pool.addAltruist((VertexAltruist) v);
+						} else {
+							pool.addPair((VertexPair) v);
+						}
+
+						scheduledForTransplant.remove(v);
+					}
+
+					// }
+
 				}
-				/*
-				 * add the new broken chain to the queue with the same scheduled
-				 * time
-				 */
-				if (newAddition != null) {
-					cycleTransplantTimes.add(newAddition);
-				}
+				// /*
+				// * add the new broken chain to the queue with the same
+				// scheduled
+				// * time
+				// */
+				// if (newAddition != null) {
+				// cycleTransplantTimes.add(newAddition);
+				// }
 
 			}
 
@@ -822,6 +853,10 @@ public class SimulationDriver {
 				 * event
 				 */
 				Cycle toTransplant = cycleTransplantTimes.poll().getRight();
+				if (toTransplant.getEdges().size() != 1) {
+					numCycles++;
+				}
+
 				for (Vertex v : Cycle
 						.getConstituentVertices(toTransplant, pool)) {
 
@@ -831,15 +866,14 @@ public class SimulationDriver {
 					/* also remove from vertices that were scheduled */
 					scheduledForTransplant.remove(v);
 				}
-				
-				/* if this transplant is part of a chain then count it as such*/
-				if(toTransplant.getEdges().size() ==1 ){
+
+				/* if this transplant is part of a chain then count it as such */
+				if (toTransplant.getEdges().size() == 1) {
 					numChainTransplants++;
 				}
 
-				for (Edge e : toTransplant.getEdges()) {
-					numTransplants++;
-				}
+				numTransplants += toTransplant.getEdges().size();
+
 			}
 
 			if (currEvent.getType().equals(EventType.ALTRUIST_ENTERS)) {
@@ -878,9 +912,26 @@ public class SimulationDriver {
 		System.out.println("Num Arrivals: " + numArrivals);
 		System.out.println("Altruists Entered: " + numAlts);
 		System.out.println("Matchings found: " + numMatchings);
-		System.out.println("Transplants Done: " + numTransplants);
-		System.out.println("Chain Transplants Done: " + numChainTransplants);
 		System.out.println("Num Chains found: " + numChains);
+		System.out.println("Total Transplants Done: " + numTransplants);
+		System.out.println("Chain Transplants Done: " + numChainTransplants);
+		System.out.println("Cycle Transplants Done: " + numCycles);
+
+		System.out.println(cycleTransplantTimes.size()
+				+ " Scheduled Transplants leftover: " + cycleTransplantTimes);
+
+		// System.out.println("Altruist blood type: ");
+		// for (Vertex v : pool.getAltruists()) {
+		// VertexAltruist va = (VertexAltruist) v;
+		// System.out.println(v + " : " + va.getBloodTypeDonor());
+		// }
+		//
+		// System.out.println("Patients blood type: ");
+		// for (Vertex v : pool.getPairs()) {
+		// VertexPair va = (VertexPair) v;
+		// System.out.println(v + " : " + va.getBloodTypePatient()
+		// +" Donor:"+va.getBloodTypeDonor());
+		// }
 
 		/*
 		 * serialize information about the transplants that occured in this
