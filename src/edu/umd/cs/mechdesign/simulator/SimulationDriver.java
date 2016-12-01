@@ -57,21 +57,24 @@ public class SimulationDriver {
 	private static ExponentialArrivalDistribution youngLifespanTimeGen;
 
 	public static void main(String[] args) {
+
 		String transplantsPath = "transplants_";
 		String altruistsPath = "altruists_";
 		String patientsPath = "patients_";
 
 		// next name
-		int k = 0;
+		// int k = 0;
 		double altruistLimit = 0.1;
-		int timeLimit = 5200;
+		int timeLimit = 1300;
+		// int timeLimit = 52;
 
-		for (double i = 0.01; i < altruistLimit; i += 0.1) {
-			System.out.println("Running for altruist arrival lambda : "+altruistLimit);
-			livingDonorSim(timeLimit, i, transplantsPath + Integer.toString(k)
-					+ ".csv", altruistsPath + Integer.toString(k) + ".csv",
-					patientsPath + Integer.toString(k) + ".csv");
-			k++;
+		for (double i = 0.01; i < altruistLimit; i += 0.02) {
+			System.out.println("Running for altruist arrival lambda : "
+					+ altruistLimit);
+			livingDonorSim(timeLimit, i, transplantsPath + Double.toString(i)
+					+ ".csv", altruistsPath + Double.toString(i) + ".csv",
+					patientsPath + Double.toString(i) + ".csv");
+			// k++;
 		}
 
 	}
@@ -202,8 +205,9 @@ public class SimulationDriver {
 
 		conductAllRemainingTransplants(pool, cg, cycleCap, chainCap);
 
-		logger.info("Pool After all possible transplants: " + pool);
-		logger.info("Altruists: " + pool.getAltruists());
+//		logger.info("Pool After all possible transplants: " + pool);
+//		logger.info("Altruists: " + pool.getAltruists());
+		
 		// GreedyPackingSolver s = new GreedyPackingSolver(pool);
 
 		// If we're setting failure probabilities, do that here:
@@ -351,7 +355,6 @@ public class SimulationDriver {
 			/* record age */
 			patientAges.put(v.getID().toString(), age);
 
-			System.out.println(v + " exit time :" + exitTime);
 			// }
 			out.set(Col.VERTEX_ID, v.toString());
 			// Write the row of data
@@ -370,7 +373,7 @@ public class SimulationDriver {
 		 * the individuals in the initial pool
 		 */
 		double startingTime = currTime;
-		logger.info("Last entry : " + startingTime);
+//		logger.info("Last entry : " + startingTime);
 
 		// schedule the arrival of altruists
 		double altrTime = currTime;
@@ -420,13 +423,13 @@ public class SimulationDriver {
 			matchingTimes.add(matchingsTime);
 		}
 
-		System.out.println("Entry time of the last patient: " + currTime);
+//		System.out.println("Entry time of the last patient: " + currTime);
 
 		/*
 		 * add new arrivals that will take place afterwards (only add pairs not
 		 * altruists for now)
 		 */
-		logger.info("Scheduling new vertex pair arrivals...");
+//		logger.info("Scheduling new vertex pair arrivals...");
 		while (true) {
 
 			/*
@@ -489,7 +492,8 @@ public class SimulationDriver {
 
 		while (currTime < timeLimit) {
 
-			logger.info("AT TIME: " + currTime);
+//			logger.info("AT TIME: " + currTime);
+			
 			if (currEvent.getType().equals(EventType.TERMINATE_SIMULATION)) {
 				logger.info("No more events to process...Terminating Simulation...");
 				break;
@@ -503,7 +507,7 @@ public class SimulationDriver {
 				Vertex toRemove = verticesByExitTime.poll().getRight();
 				if (pool.removeVertex(toRemove)) {
 					numDeaths++;
-					logger.info("We lost a patient... RIP " + toRemove);
+//					logger.info("We lost a patient... RIP " + toRemove);
 				}
 
 				/*
@@ -512,7 +516,7 @@ public class SimulationDriver {
 				 */
 				else if (scheduledForTransplant.remove(toRemove)) {
 					numDeaths++;
-					logger.info("We lost a patient... RIP " + toRemove);
+//					logger.info("We lost a patient... RIP " + toRemove);
 				}
 
 				/*
@@ -720,8 +724,8 @@ public class SimulationDriver {
 				// .getRight();
 				// pool.addPair((VertexPair) toAdd);
 
-				logger.info("Adding new patient");
-				logger.info("State of the Pool: " + pool);
+//				logger.info("Adding new patient");
+//				logger.info("State of the Pool: " + pool);
 
 				/* setting exit time */
 				double age = ageGen.drawPatientAge();
@@ -749,7 +753,7 @@ public class SimulationDriver {
 				// occur)
 
 				// run matching, update
-				logger.info("conducting matchings..");
+//				logger.info("conducting matchings..");
 
 				/*
 				 * add cycles and the time they should happen to the priority
@@ -765,8 +769,8 @@ public class SimulationDriver {
 				 * Add the new matchings to the queue of matchings that should
 				 * happen.
 				 */
-				logger.info("State of pool BEFORE  Transplants: " + pool);
-				System.out.println("Altruists: " + pool.getAltruists());
+//				logger.info("State of pool BEFORE  Transplants: " + pool);
+//				System.out.println("Altruists: " + pool.getAltruists());
 
 				for (Cycle c : s.getMatching()) {
 					numMatchings++;
@@ -781,7 +785,7 @@ public class SimulationDriver {
 						 * correct order
 						 */
 						Collections.reverse(c.getEdges());
-						System.out.println("Got a CHAIN! " + c);
+//						System.out.println("Got a CHAIN! " + c);
 
 						numChains++;
 
@@ -810,7 +814,7 @@ public class SimulationDriver {
 											+ schedulingTime), chainPortion);
 
 							cycleTransplantTimes.add(pr);
-							System.out.println("scheduling: " + pr);
+//							System.out.println("scheduling: " + pr);
 						}
 
 					} else {
@@ -831,17 +835,17 @@ public class SimulationDriver {
 
 				}
 
-				logger.info("State of pool After Transplants: " + pool);
+//				logger.info("State of pool After Transplants: " + pool);
 
-				System.out.println("SCHEDULED TRANSPLANTS: "
-						+ cycleTransplantTimes);
+//				System.out.println("SCHEDULED TRANSPLANTS: "
+//						+ cycleTransplantTimes);
 
 				// Thread.sleep(5000);
 
 			}
 
 			if (currEvent.getType().equals(EventType.CONDUCT_TRANSPLANT)) {
-				logger.info("Transplant done...");
+//				logger.info("Transplant done...");
 
 				/*
 				 * TODO conducting a transplant means removing the patients from
@@ -887,8 +891,8 @@ public class SimulationDriver {
 				// we're only generating one at a time
 				Vertex toAdd = l.iterator().next();
 
-				logger.info("Adding new altruist");
-				logger.info("State of the Pool: " + pool);
+//				logger.info("Adding new altruist");
+//				logger.info("State of the Pool: " + pool);
 
 				/* adding the altruist by entry time exit time */
 				altruistsByEntryTime.add(new Pair<Double, Vertex>(currTime,

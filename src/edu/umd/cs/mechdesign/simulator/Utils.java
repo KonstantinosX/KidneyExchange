@@ -129,6 +129,7 @@ public class Utils {
 			if (transplantTimes.containsKey(patient)) {
 				exitReason = "SUCCESSFULL_TRANSPLANT";
 				exitTime = transplantTimes.get(patient);
+				waitingTime = exitTime - entryTime;
 			} else {
 				/*
 				 * skip and don't record this patient if we don't know what will
