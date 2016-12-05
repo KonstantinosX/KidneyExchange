@@ -44,7 +44,6 @@ import edu.cmu.cs.dickerson.kpd.structure.generator.SaidmanPoolGenerator;
 public class SimulationDriver {
 	private static final Logger logger = Logger
 			.getLogger(SimulationDriver.class.getSimpleName());
-
 	/*
 	 * drawing from an exponential distribution gives you numbers whose average
 	 * is roughly 1/lambda
@@ -63,18 +62,19 @@ public class SimulationDriver {
 		String patientsPath = "patients_";
 
 		// next name
-		// int k = 0;
-		double altruistLimit = 0.1;
+		int k = 0;
+		double altruistLimit = 3;
 		int timeLimit = 1300;
+		double z = 0.11;
 		// int timeLimit = 52;
 
-		for (double i = 0.01; i < altruistLimit; i += 0.02) {
+		for (int i = 0; i < altruistLimit; i++) {
 			System.out.println("Running for altruist arrival lambda : "
 					+ altruistLimit);
-			livingDonorSim(timeLimit, i, transplantsPath + Double.toString(i)
-					+ ".csv", altruistsPath + Double.toString(i) + ".csv",
-					patientsPath + Double.toString(i) + ".csv");
-			// k++;
+			livingDonorSim(timeLimit, z, transplantsPath + Integer.toString(i)
+					+ ".csv", altruistsPath + Integer.toString(i) + ".csv",
+					patientsPath + Integer.toString(i) + ".csv");
+			k++;
 		}
 
 	}
@@ -103,6 +103,10 @@ public class SimulationDriver {
 		int numChainTransplants = 0;
 		int numCycles = 0;
 
+		// test
+		int totalScheduledCycles = 0;
+		int totalScheduledChains = 0;
+
 		// 5630 living donors per year
 		// normally 10-15 scaling down to 1/2 roughly
 		double patientArrivalLambda = 6;
@@ -121,6 +125,7 @@ public class SimulationDriver {
 		// so if 100 people enter in a week, 1 is an altruist.
 
 		// double altArrivalLambda = patientArrivalLambda * 0.01;
+		altArrivalLambda = altArrivalLambda * patientArrivalLambda;
 
 		/* Conduct matchings once every interval weeks */
 		double matchingsInterval = 2;
@@ -205,9 +210,9 @@ public class SimulationDriver {
 
 		conductAllRemainingTransplants(pool, cg, cycleCap, chainCap);
 
-//		logger.info("Pool After all possible transplants: " + pool);
-//		logger.info("Altruists: " + pool.getAltruists());
-		
+		// logger.info("Pool After all possible transplants: " + pool);
+		// logger.info("Altruists: " + pool.getAltruists());
+
 		// GreedyPackingSolver s = new GreedyPackingSolver(pool);
 
 		// If we're setting failure probabilities, do that here:
@@ -373,7 +378,7 @@ public class SimulationDriver {
 		 * the individuals in the initial pool
 		 */
 		double startingTime = currTime;
-//		logger.info("Last entry : " + startingTime);
+		// logger.info("Last entry : " + startingTime);
 
 		// schedule the arrival of altruists
 		double altrTime = currTime;
@@ -423,13 +428,13 @@ public class SimulationDriver {
 			matchingTimes.add(matchingsTime);
 		}
 
-//		System.out.println("Entry time of the last patient: " + currTime);
+		// System.out.println("Entry time of the last patient: " + currTime);
 
 		/*
 		 * add new arrivals that will take place afterwards (only add pairs not
 		 * altruists for now)
 		 */
-//		logger.info("Scheduling new vertex pair arrivals...");
+		// logger.info("Scheduling new vertex pair arrivals...");
 		while (true) {
 
 			/*
@@ -492,8 +497,8 @@ public class SimulationDriver {
 
 		while (currTime < timeLimit) {
 
-//			logger.info("AT TIME: " + currTime);
-			
+			// logger.info("AT TIME: " + currTime);
+
 			if (currEvent.getType().equals(EventType.TERMINATE_SIMULATION)) {
 				logger.info("No more events to process...Terminating Simulation...");
 				break;
@@ -507,7 +512,7 @@ public class SimulationDriver {
 				Vertex toRemove = verticesByExitTime.poll().getRight();
 				if (pool.removeVertex(toRemove)) {
 					numDeaths++;
-//					logger.info("We lost a patient... RIP " + toRemove);
+					// logger.info("We lost a patient... RIP " + toRemove);
 				}
 
 				/*
@@ -516,7 +521,7 @@ public class SimulationDriver {
 				 */
 				else if (scheduledForTransplant.remove(toRemove)) {
 					numDeaths++;
-//					logger.info("We lost a patient... RIP " + toRemove);
+					// logger.info("We lost a patient... RIP " + toRemove);
 				}
 
 				/*
@@ -709,6 +714,7 @@ public class SimulationDriver {
 
 			// add new patient
 			if (currEvent.getType().equals(EventType.PATIENT_ENTERS)) {
+
 				numArrivals++;
 
 				int addPair = 1;
@@ -724,8 +730,8 @@ public class SimulationDriver {
 				// .getRight();
 				// pool.addPair((VertexPair) toAdd);
 
-//				logger.info("Adding new patient");
-//				logger.info("State of the Pool: " + pool);
+				// logger.info("Adding new patient");
+				// logger.info("State of the Pool: " + pool);
 
 				/* setting exit time */
 				double age = ageGen.drawPatientAge();
@@ -753,7 +759,7 @@ public class SimulationDriver {
 				// occur)
 
 				// run matching, update
-//				logger.info("conducting matchings..");
+				// logger.info("conducting matchings..");
 
 				/*
 				 * add cycles and the time they should happen to the priority
@@ -769,8 +775,8 @@ public class SimulationDriver {
 				 * Add the new matchings to the queue of matchings that should
 				 * happen.
 				 */
-//				logger.info("State of pool BEFORE  Transplants: " + pool);
-//				System.out.println("Altruists: " + pool.getAltruists());
+				// logger.info("State of pool BEFORE  Transplants: " + pool);
+				// System.out.println("Altruists: " + pool.getAltruists());
 
 				for (Cycle c : s.getMatching()) {
 					numMatchings++;
@@ -785,7 +791,7 @@ public class SimulationDriver {
 						 * correct order
 						 */
 						Collections.reverse(c.getEdges());
-//						System.out.println("Got a CHAIN! " + c);
+						// System.out.println("Got a CHAIN! " + c);
 
 						numChains++;
 
@@ -814,7 +820,8 @@ public class SimulationDriver {
 											+ schedulingTime), chainPortion);
 
 							cycleTransplantTimes.add(pr);
-//							System.out.println("scheduling: " + pr);
+
+							totalScheduledChains++;
 						}
 
 					} else {
@@ -824,7 +831,9 @@ public class SimulationDriver {
 								.randomInRange(currTime, currTime
 										+ schedulingTime), c));
 
+						totalScheduledCycles++;
 					}
+
 					/*
 					 * remove vertices in scheduled cycle transplants from pool
 					 */
@@ -835,17 +844,17 @@ public class SimulationDriver {
 
 				}
 
-//				logger.info("State of pool After Transplants: " + pool);
+				// logger.info("State of pool After Transplants: " + pool);
 
-//				System.out.println("SCHEDULED TRANSPLANTS: "
-//						+ cycleTransplantTimes);
+				// System.out.println("SCHEDULED TRANSPLANTS: "
+				// + cycleTransplantTimes);
 
 				// Thread.sleep(5000);
 
 			}
 
 			if (currEvent.getType().equals(EventType.CONDUCT_TRANSPLANT)) {
-//				logger.info("Transplant done...");
+				// logger.info("Transplant done...");
 
 				/*
 				 * TODO conducting a transplant means removing the patients from
@@ -861,23 +870,42 @@ public class SimulationDriver {
 					numCycles++;
 				}
 
-				for (Vertex v : Cycle
-						.getConstituentVertices(toTransplant, pool)) {
-
-					pool.removeVertex(v);
-					transplantTimes.put(v, currTime);
-
-					/* also remove from vertices that were scheduled */
-					scheduledForTransplant.remove(v);
-				}
-
 				/* if this transplant is part of a chain then count it as such */
 				if (toTransplant.getEdges().size() == 1) {
 					numChainTransplants++;
 				}
 
-				numTransplants += toTransplant.getEdges().size();
+				for (Vertex v : Cycle
+						.getConstituentVertices(toTransplant, pool)) {
 
+					pool.removeVertex(v);
+
+					if (transplantTimes.containsKey(v)) {
+						System.out.println(v + " was already transplanted! ");
+						System.exit(0);
+					} else {
+						transplantTimes.put(v, currTime);
+					}
+
+					/* also remove from vertices that were scheduled */
+					scheduledForTransplant.remove(v);
+
+					/*
+					 * also clean up cycles that include the same person twice
+					 * now that a cycle has been chosen
+					 */
+					Iterator<Pair<Double, Cycle>> it = cycleTransplantTimes
+							.iterator();
+					while (it.hasNext()) {
+						Cycle c = it.next().getRight();
+						if (Cycle.getConstituentVertices(c, pool).contains(v)) {
+							it.remove();
+						}
+					}
+				}
+
+				numTransplants += toTransplant.getEdges().size();
+				// System.out.println("CYCLES LEFT: " + cycleTransplantTimes);
 			}
 
 			if (currEvent.getType().equals(EventType.ALTRUIST_ENTERS)) {
@@ -891,8 +919,8 @@ public class SimulationDriver {
 				// we're only generating one at a time
 				Vertex toAdd = l.iterator().next();
 
-//				logger.info("Adding new altruist");
-//				logger.info("State of the Pool: " + pool);
+				// logger.info("Adding new altruist");
+				// logger.info("State of the Pool: " + pool);
 
 				/* adding the altruist by entry time exit time */
 				altruistsByEntryTime.add(new Pair<Double, Vertex>(currTime,
@@ -920,6 +948,9 @@ public class SimulationDriver {
 		System.out.println("Total Transplants Done: " + numTransplants);
 		System.out.println("Chain Transplants Done: " + numChainTransplants);
 		System.out.println("Cycle Transplants Done: " + numCycles);
+
+		System.out.println("Total Scheduled Chains: " + totalScheduledChains);
+		System.out.println("Total Scheduled Cycles: " + totalScheduledCycles);
 
 		System.out.println(cycleTransplantTimes.size()
 				+ " Scheduled Transplants leftover: " + cycleTransplantTimes);
@@ -998,7 +1029,7 @@ public class SimulationDriver {
 
 	public static Solution conductMatches(Pool pool, CycleGenerator cg,
 			int cycleCap, int chainCap) {
-		logger.info("State of the Pool: " + pool);
+		// logger.info("State of the Pool: " + pool);
 		boolean usingFailureProbabilities = false;
 		double failure_param1 = 0.7; // e.g., constant failure rate of 70%
 		// This should happen after a constant interval
@@ -1044,9 +1075,9 @@ public class SimulationDriver {
 
 		Solution sol = packer.pack();
 
-		logger.info(sol.getMatching().toString());
-		IOUtil.dPrintln("'Optimal IP' (UB extension) Value: "
-				+ sol.getObjectiveValue());
+		// logger.info(sol.getMatching().toString());
+		// IOUtil.dPrintln("'Optimal IP' (UB extension) Value: "
+		// + sol.getObjectiveValue());
 		// Try to GC
 		// cyclesAndChains = null;
 		// membershipUB2 = null;
