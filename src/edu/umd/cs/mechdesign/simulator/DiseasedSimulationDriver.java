@@ -26,7 +26,36 @@ public class DiseasedSimulationDriver {
 	private static ExponentialArrivalDistribution lifespanTimeGen_old;
 	private static ExponentialArrivalDistribution organArrivalTimeGen;
 
+	
 	public static void main(String[] args) {
+
+		String csvFileTran = "././transplants_";
+		String csvFileAlt = "././altruists_";
+		String pathOutput = "././patientInfo_";
+
+		double altruistLimit = 0.2;
+		int timeLimit = 70*52+140;
+		//+140 because it takes longer for the deceased to initialize
+
+		for (double i = 0.01; i < altruistLimit; i+=0.02) {
+			System.out.println("Running for altruist arrival lambda : "+ altruistLimit);
+			for (int j = 0; j < 10; j += 1) {
+				deceasedDonorSim(timeLimit, csvFileTran + Double.toString(i)
+					+"_"+j+ ".csv", csvFileAlt + Double.toString(i) + "_"+j+".csv",
+					pathOutput + Double.toString(i) +"_"+j+ ".csv");
+			// k++;
+			}
+		}
+
+	}
+	
+	public static void deceasedDonorSim(double timeLimit,
+			String csvFileTran,
+			String csvFileAlt, String pathOutput) {
+		
+		//String csvFileTran = "././transplants.csv";
+		//String csvFileAlt = "././altruists.csv";
+		//String pathOutput = "././patientInfo.csv";
 		
 		int total_organs=0;
 		int total_new_patients=0;
@@ -92,7 +121,9 @@ public class DiseasedSimulationDriver {
 		DeceasedEvent currDeceasedEvent = null;
 		double lastExitTime = -1;
 		//run time in weeks
-		double timeLimit = 5200; //100 years
+		
+		// read from main
+		// double timeLimit = 5200; //100 years
 		double deceasedSimulationZeroTime;
 		
 		
@@ -154,6 +185,7 @@ public class DiseasedSimulationDriver {
 		Collections.shuffle(AllInitialPatients, new Random(seed));
 		
 		
+		
 		// create entry and exit times for patients initially in the queue
 		
 		for (WaitlistedPatient w : AllInitialPatients){
@@ -190,16 +222,17 @@ public class DiseasedSimulationDriver {
 		deceasedSimulationZeroTime = currTime;
 		
 		
+		
 		// schedule arrival of altruistic donors
 		
-//		altruistsByEntryTime = Utils.readAltruists(timeLimit, deceasedSimulationZeroTime, DKGen);
-//		System.out.print("Time that first altruist gets sick "+altruistsByEntryTime.peek().getLeft()+"\n");
+		altruistsByEntryTime = Utils.readAltruists(timeLimit, deceasedSimulationZeroTime, DKGen,csvFileAlt);
+		System.out.print("Time that first altruist gets sick "+altruistsByEntryTime.peek().getLeft()+"\n");
 		
 
 		
 		// schedule departure of patients getting a living donor kidney
 		
-		patientsByLeavingTime = Utils.readPatientGivenLDK( timeLimit,  deceasedSimulationZeroTime,  DKGen);
+		patientsByLeavingTime = Utils.readPatientGivenLDK( timeLimit,  deceasedSimulationZeroTime,  DKGen, csvFileTran);
 		System.out.print("Time that first patient gets LDK "+patientsByLeavingTime.peek().getLeft()+"\n");
 		
 
@@ -332,13 +365,13 @@ public class DiseasedSimulationDriver {
 				WaitlistedPatient toRemove = (WaitlistedPatient)patientsByLeavingTime.poll().getRight();
 				boolean flag = true;
 				
-				
+				int numTries=0;
 				while(flag){
 					double IndexToRemoveDouble = r.nextDouble()*DKWaitingList.get(toRemove.getBloodTypePatient()).size() ;
 					int IndexToRemove = (int) IndexToRemoveDouble;
 					if(!DKWaitingList.get(toRemove.getBloodTypePatient()).isEmpty()){
 						WaitlistedPatient w = DKWaitingList.get(toRemove.getBloodTypePatient()).get(IndexToRemove);
-						if(!w.isIsAnAltruist()){
+						if((!w.isIsAnAltruist())||(numTries>=100)){
 							System.out.println("Patient with ID " +DKWaitingList.get(toRemove.getBloodTypePatient()).get(IndexToRemove).getID()+ "got an organ from a living donor!");
 							
 							// keep information
@@ -349,10 +382,14 @@ public class DiseasedSimulationDriver {
 							DKWaitingList.get(toRemove.getBloodTypePatient()).remove(IndexToRemove);
 							flag = false;
 						}
+						else{
+							numTries++;
+						}
 					}
 					else{
 						flag = false;
 					}
+
 					
 				}
 					
@@ -628,8 +665,9 @@ public class DiseasedSimulationDriver {
 		lifespanTimeGen_old = new ExponentialArrivalDistribution(lambda_old, r);
 		
 		//write information in CSV
-		Utils.printPatientInformation("././patientInfo.csv", allinfo);
 		
+		Utils.printPatientInformation(pathOutput, allinfo);
+
 		return;
 	}
 	

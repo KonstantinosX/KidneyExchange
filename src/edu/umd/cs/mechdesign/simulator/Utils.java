@@ -355,13 +355,13 @@ public class Utils {
 
 	public static Queue<Pair<Double, Vertex>> readAltruists(double timeLimit,
 			double deceasedSimulationZeroTime,
-			PatientsForDeceasedDonorGenerator DKGen) {
+			PatientsForDeceasedDonorGenerator DKGen,String csvFile) {
 
 		// create queue than includes entry time and altruists
 		Queue<Pair<Double, Vertex>> altruistsByEntryTime = new PriorityQueue<Pair<Double, Vertex>>(
 				(int) timeLimit, new VertexTimeComparator());
 
-		String csvFile = "././altruists.csv";
+		//String csvFile = "././altruists.csv";
 		String line = "";
 		String cvsSplitBy = ",";
 		int myline = 1;
@@ -431,13 +431,13 @@ public class Utils {
 	// read the csv file and return a list of patient objects
 	public static Queue<Pair<Double, Vertex>> readPatientGivenLDK(
 			double timeLimit, double deceasedSimulationZeroTime,
-			PatientsForDeceasedDonorGenerator DKGen) {
+			PatientsForDeceasedDonorGenerator DKGen,String csvFile) {
 
 		// create queue than includes entry time and altruists
 		Queue<Pair<Double, Vertex>> patientsByLeavingTime = new PriorityQueue<Pair<Double, Vertex>>(
 				(int) timeLimit, new VertexTimeComparator());
 
-		String csvFile = "././transplants.csv";
+		//String csvFile = "././transplants.csv";
 		String line = "";
 		String cvsSplitBy = ",";
 		int myline = 1;
